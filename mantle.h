@@ -9,15 +9,17 @@
 #define GR_UINT32 uint32_t
 #define GR_UINT64 uint64_t
 #define GR_FLOAT float
-#define GR_BOOL bool
+#define GR_BOOL uint32_t
 #define GR_VOID void
 #define GR_SIZE size_t
 #define GR_UINT8 uint8_t
+#define GR_INT int32_t
 #define GR_UINT uint32_t
 #define GR_ENUM int32_t
 #define GR_FLAGS int32_t
 #define GR_PHYSICAL_GPU uint64_t
 #define GR_DEVICE uint64_t
+#define GR_WSI_WIN_DISPLAY uint64_t
 #define GR_MAX_PHYSICAL_GPUS 4
 
 #define GR_API_VERSION 1
@@ -108,6 +110,51 @@ typedef enum _GR_DEVICE_CREATE_FLAGS {
 	GR_DEVICE_CREATE_VALIDATION = 0x00000001,
 } GR_DEVICE_CREATE_FLAGS;
 
+typedef enum _GR_CHANNEL_FORMAT {
+	GR_CH_FMT_UNDEFINED,
+	GR_CH_FMT_R4G4,
+	GR_CH_FMT_R4G4B4A4,
+	GR_CH_FMT_R5G6B5,
+	GR_CH_FMT_B5G6R5,
+	GR_CH_FMT_R5G5B5A1,
+	GR_CH_FMT_R8,
+	GR_CH_FMT_R8G8,
+	GR_CH_FMT_R8G8B8A8,
+	GR_CH_FMT_B8G8R8A8,
+	GR_CH_FMT_R10G11B11,
+	GR_CH_FMT_R11G11B10,
+	GR_CH_FMT_R10G10B10A2,
+	GR_CH_FMT_R16,
+	GR_CH_FMT_R16G16,
+	GR_CH_FMT_R16G16B16A16,
+	GR_CH_FMT_R32,
+	GR_CH_FMT_R32G32,
+	GR_CH_FMT_R32G32B32,
+	GR_CH_FMT_R32G32B32A32,
+	GR_CH_FMT_R16G8,
+	GR_CH_FMT_R32G8,
+	GR_CH_FMT_R9G9B9E5,
+	GR_CH_FMT_BC1,
+	GR_CH_FMT_BC2,
+	GR_CH_FMT_BC3,
+	GR_CH_FMT_BC4,
+	GR_CH_FMT_BC5,
+	GR_CH_FMT_BC6U,
+	GR_CH_FMT_BC6S,
+	GR_CH_FMT_BC7
+} GR_CHANNEL_FORMAT;
+
+typedef enum _GR_NUM_FORMAT {
+	GR_NUM_FMT_UNDEFINED,
+	GR_NUM_FMT_UNORM,
+	GR_NUM_FMT_SNORM,
+	GR_NUM_FMT_UINT,
+	GR_NUM_FMT_SINT,
+	GR_NUM_FMT_FLOAT,
+	GR_NUM_FMT_SRGB,
+	GR_NUM_FMT_DS
+} GR_NUM_FORMAT;
+
 // Guesses
 #define GR_GPU_SIZE size_t
 #define GR_MAX_PHYSICAL_GPU_NAME 255
@@ -186,6 +233,24 @@ typedef struct _GR_DEVICE_CREATE_INFO {
 	GR_FLAGS flags;
 } GR_DEVICE_CREATE_INFO;
 
+typedef struct _GR_EXTENT2D {
+	GR_INT width;
+	GR_INT height;
+} GR_EXTENT2D;
+
+typedef struct _GR_FORMAT {
+	GR_UINT32 channelFormat : 16;
+	GR_UINT32 numericFormat : 16;
+} GR_FORMAT;
+
+typedef struct _GR_WSI_WIN_DISPLAY_MODE {
+	GR_EXTENT2D extent;
+	GR_FORMAT format;
+	GR_UINT refreshRate;
+	GR_BOOL stereo;
+	GR_BOOL crossDisplayPresent;
+} GR_WSI_WIN_DISPLAY_MODE;
+
 /*
 	API function pointers
 */
@@ -202,9 +267,23 @@ typedef GR_RESULT (GR_STDCALL *grGetGpuInfoPtr)(
 	GR_SIZE* pDataSize,
 	GR_VOID* pData);
 
+typedef GR_RESULT (GR_STDCALL *grGetExtensionSupportPtr)(
+	GR_PHYSICAL_GPU gpu,
+	const GR_CHAR* pExtName);
+
 typedef GR_RESULT (GR_STDCALL *grCreateDevicePtr)(
 	GR_PHYSICAL_GPU gpu,
 	const GR_DEVICE_CREATE_INFO* pCreateInfo,
 	GR_DEVICE* pDevice);
+
+typedef GR_RESULT (GR_STDCALL *grWsiWinGetDisplaysPtr)(
+	GR_DEVICE device,
+	GR_UINT* pDisplayCount,
+	GR_WSI_WIN_DISPLAY* pDisplayList);
+
+typedef GR_RESULT (GR_STDCALL *grWsiWinGetDisplayModeListPtr)(
+	GR_WSI_WIN_DISPLAY display,
+	GR_UINT* pDisplayModeCount,
+	GR_WSI_WIN_DISPLAY_MODE* pDisplayModeList);
 
 #endif

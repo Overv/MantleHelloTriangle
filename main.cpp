@@ -24,18 +24,19 @@ int main() {
 		Load library and function entry points
 	*/
 
-	HMODULE mandleDll = LoadLibrary(TEXT("mantle64.dll"));
+	HMODULE mantleDll = LoadLibrary(TEXT("mantle64.dll"));
 
-	if (!mandleDll) {
+	if (!mantleDll) {
 		std::cerr << "error: no Mantle runtime available" << std::endl;
 		return 1;
 	}
 
-	grInitAndEnumerateGpusPtr grInitAndEnumerateGpus = (grInitAndEnumerateGpusPtr) GetProcAddress(mandleDll, "grInitAndEnumerateGpus");
-	grCreateDevicePtr grCreateDevice = (grCreateDevicePtr) GetProcAddress(mandleDll, "grCreateDevice");
-	grGetGpuInfoPtr grGetGpuInfo = (grGetGpuInfoPtr) GetProcAddress(mandleDll, "grGetGpuInfo");
+	grInitAndEnumerateGpusPtr grInitAndEnumerateGpus = (grInitAndEnumerateGpusPtr) GetProcAddress(mantleDll, "grInitAndEnumerateGpus");
+	grGetGpuInfoPtr grGetGpuInfo = (grGetGpuInfoPtr) GetProcAddress(mantleDll, "grGetGpuInfo");
+	grGetExtensionSupportPtr grGetExtensionSupport = (grGetExtensionSupportPtr) GetProcAddress(mantleDll, "grGetExtensionSupport");
+	grCreateDevicePtr grCreateDevice = (grCreateDevicePtr) GetProcAddress(mantleDll, "grCreateDevice");
 
-	if (!grInitAndEnumerateGpus || !grCreateDevice || !grGetGpuInfo) {
+	if (!grInitAndEnumerateGpus || !grGetGpuInfo || !grGetExtensionSupport || !grCreateDevice) {
 		std::cerr << "error: couldn't locate (some) Mantle functions" << std::endl;
 		return 1;
 	}
@@ -115,8 +116,24 @@ int main() {
 		std::cout << "\t\t\tqueueType = " << enumToString(queue.queueType) << std::endl;
 		std::cout << "\t\t\tqueueCount = " << queue.queueCount << std::endl;
 		std::cout << "\t\t\tmaxAtomicCounters = " << queue.maxAtomicCounters << std::endl;
-		std::cout << "\t\t\tsupportsTimestamps = " << std::boolalpha << queue.supportsTimestamps << std::endl;
+		std::cout << "\t\t\tsupportsTimestamps = " << std::boolalpha << (bool) queue.supportsTimestamps << std::endl;
 	}
+
+	/*
+		Check if the Windows extension is supported and locate its functions
+	*/
+
+	result = grGetExtensionSupport(gpu, "GR_WSI_WINDOWS");
+
+	if (result != GR_SUCCESS) {
+		std::cerr << "grGetExtensionSupport:\n\tWindows extension not supported!" << std::endl;
+		return 1;
+	} else {
+		std::cout << "grGetExtensionSupport:\n\tWindows extension is supported" << std::endl;
+	}
+
+	grWsiWinGetDisplaysPtr grWsiWinGetDisplays = (grWsiWinGetDisplaysPtr) GetProcAddress(mantleDll, "grWsiWinGetDisplays");
+	grWsiWinGetDisplayModeListPtr grWsiWinGetDisplayModeList = (grWsiWinGetDisplayModeListPtr) GetProcAddress(mantleDll, "grWsiWinGetDisplayModeList");
 
 	/*
 		Create device and queue
@@ -149,6 +166,31 @@ int main() {
 		return 1;
 	} else {
 		std::cout << "grCreateDevice:\n\tcreated device handle for physical gpu" << std::endl;
+	}
+
+	/*
+		Query available displays
+	*/
+
+	// Check amount of displays
+	GR_UINT displayCount;
+	grWsiWinGetDisplays(device, &displayCount, nullptr);
+
+	std::vector<GR_WSI_WIN_DISPLAY> displayHandles;
+	displayHandles.resize(displayCount);
+
+	result = grWsiWinGetDisplays(device, &displayCount, &displayHandles[0]);
+
+	std::cout << "grWsiWinGetDisplays:" << std::endl;
+
+	// Show supported display modes per display
+	for (int d = 0; d < displayCount; d++) {
+		std::cout << "\tdisplay #" << std::dec << d << ":" << std::endl;
+
+		GR_UINT displayModeCount;
+		result = grWsiWinGetDisplayModeList(displayHandles[d], &displayModeCount, nullptr);
+
+		std::cout << "\t\t" << displayModeCount << " supported modes" << std::endl;
 	}
 
 	return 0;
