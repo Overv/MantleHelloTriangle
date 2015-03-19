@@ -1,28 +1,49 @@
 #include <iostream>
+#include <vector>
 #include <cstdint>
 
 #include <Windows.h>
 #include "mantle.h"
 
-int main() {
-	// Load Mantle library dynamically
-	HMODULE libMantle = LoadLibrary(TEXT("mantle64.dll"));
+const char* enumToString(int32_t type) {
+	switch (type) {
+	case GR_GPU_TYPE_OTHER: return "GR_GPU_TYPE_OTHER";
+	case GR_GPU_TYPE_INTEGRATED: return "GR_GPU_TYPE_INTEGRATED";
+	case GR_GPU_TYPE_DISCRETE: return "GR_GPU_TYPE_DISCRETE";
+	case GR_GPU_TYPE_VIRTUAL: return "GR_GPU_TYPE_VIRTUAL";
+	case GR_QUEUE_UNIVERSAL: return "GR_QUEUE_UNIVERSAL";
+	case GR_QUEUE_COMPUTE: return "GR_QUEUE_COMPUTE";
+	case GR_EXT_QUEUE_DMA: return "GR_EXT_QUEUE_DMA";
+	case GR_EXT_QUEUE_TIMER: return "GR_EXT_QUEUE_TIMER";
+	default: return "???";
+	}
+}
 
-	if (!libMantle) {
+int main() {
+	/*
+		Load library and function entry points
+	*/
+
+	HMODULE mandleDll = LoadLibrary(TEXT("mantle64.dll"));
+
+	if (!mandleDll) {
 		std::cerr << "error: no Mantle runtime available" << std::endl;
 		return 1;
 	}
 
-	// Locate function entry points
-	grInitAndEnumerateGpusPtr grInitAndEnumerateGpus = (grInitAndEnumerateGpusPtr) GetProcAddress(libMantle, "grInitAndEnumerateGpus");
-	grCreateDevicePtr grCreateDevice = (grCreateDevicePtr) GetProcAddress(libMantle, "grCreateDevice");
+	grInitAndEnumerateGpusPtr grInitAndEnumerateGpus = (grInitAndEnumerateGpusPtr) GetProcAddress(mandleDll, "grInitAndEnumerateGpus");
+	grCreateDevicePtr grCreateDevice = (grCreateDevicePtr) GetProcAddress(mandleDll, "grCreateDevice");
+	grGetGpuInfoPtr grGetGpuInfo = (grGetGpuInfoPtr) GetProcAddress(mandleDll, "grGetGpuInfo");
 
-	if (!grInitAndEnumerateGpus || !grCreateDevice) {
+	if (!grInitAndEnumerateGpus || !grCreateDevice || !grGetGpuInfo) {
 		std::cerr << "error: couldn't locate (some) Mantle functions" << std::endl;
 		return 1;
 	}
 
-	// Query for compatible gpus
+	/*
+		Find Mantle compatible GPU
+	*/
+
 	GR_APPLICATION_INFO appInfo = {};
 	appInfo.apiVersion = GR_API_VERSION;
 
@@ -31,20 +52,81 @@ int main() {
 	GR_RESULT result = grInitAndEnumerateGpus(&appInfo, nullptr, &gpuCount, gpus);
 
 	if (result != GR_SUCCESS) {
-		std::cerr << "grInitAndEnumerateGpus: error = " << std::hex << result << std::endl;
+		std::cerr << "grInitAndEnumerateGpus:\n\terror = " << std::hex << result << std::endl;
 		return 1;
 	} else if (gpuCount == 0) {
-		std::cerr << "grInitAndEnumerateGpus: no compatible gpus found" << std::endl;
-	} else {
-		std::cout << "grInitAndEnumerateGpus: found " << gpuCount << " compatible gpu(s), using the first one with handle " << std::hex << gpus[0] << std::endl;
+		std::cerr << "grInitAndEnumerateGpus:\n\tno compatible gpus found" << std::endl;
+		return 1;
 	}
+
+	/*
+		Collect info on the first compatible GPU
+	*/
+
+	GR_PHYSICAL_GPU gpu = gpus[0];
+	std::cout << "grInitAndEnumerateGpus:\n\tfound " << gpuCount << " compatible gpu(s), using the first one with handle " << std::hex << gpu << std::endl;
+
+	// GPU properties
+	std::cout << "grGetGpuInfo:" << std::endl;
+
+	GR_PHYSICAL_GPU_PROPERTIES gpuProperties;
+	GR_SIZE dataSize = sizeof(gpuProperties);
+	result = grGetGpuInfo(gpu, GR_INFO_TYPE_PHYSICAL_GPU_PROPERTIES, &dataSize, &gpuProperties);
+
+	std::cout << "\tGR_INFO_TYPE_PHYSICAL_GPU_PROPERTIES:" << std::endl;
+	std::cout << "\t\tapiVersion = " << gpuProperties.apiVersion << std::endl;
+	std::cout << "\t\tdriverVersion = " << gpuProperties.driverVersion << std::endl;
+	std::cout << "\t\tvendorId = " << gpuProperties.vendorId << std::endl;
+	std::cout << "\t\tdeviceId = " << gpuProperties.deviceId << std::endl;
+	std::cout << "\t\tgpuType = " << enumToString(gpuProperties.gpuType) << std::endl;
+	std::cout << "\t\tgpuName = \"" << gpuProperties.gpuName << "\"" << std::endl;
+	std::cout << "\t\tmaxMemRefsPerSubmission = " << gpuProperties.maxMemRefsPerSubmission << std::endl;
+	std::cout << "\t\tmaxInlineMemoryUpdateSize = " << gpuProperties.maxInlineMemoryUpdateSize << std::endl;
+	std::cout << "\t\tmaxBoundDescriptorSets = " << gpuProperties.maxBoundDescriptorSets << std::endl;
+	std::cout << "\t\tmaxThreadGroupSize = " << gpuProperties.maxThreadGroupSize << std::endl;
+	std::cout << "\t\ttimestampFrequency = " << gpuProperties.timestampFrequency << std::endl;
+	std::cout << "\t\tmultiColorTargetClears = " << std::boolalpha << gpuProperties.multiColorTargetClears << std::endl;
+
+	// GPU performance
+	GR_PHYSICAL_GPU_PERFORMANCE gpuPerformance;
+	dataSize = sizeof(gpuPerformance);
+	result = grGetGpuInfo(gpu, GR_INFO_TYPE_PHYSICAL_GPU_PERFORMANCE, &dataSize, &gpuPerformance);
+
+	std::cout << "\tGR_INFO_TYPE_PHYSICAL_GPU_PERFORMANCE:" << std::endl;
+	std::cout << "\t\tmaxGpuClock = " << gpuPerformance.maxGpuClock << std::endl;
+	std::cout << "\t\taluPerClock = " << gpuPerformance.aluPerClock << std::endl;
+	std::cout << "\t\ttexPerClock = " << gpuPerformance.texPerClock << std::endl;
+	std::cout << "\t\tprimsPerClock = " << gpuPerformance.primsPerClock << std::endl;
+	std::cout << "\t\tpixelsPerClock = " << gpuPerformance.pixelsPerClock << std::endl;
+
+	// Query amount of supported queues
+	result = grGetGpuInfo(gpu, GR_INFO_TYPE_PHYSICAL_GPU_QUEUE_PROPERTIES, &dataSize, nullptr);
+	
+	std::vector<GR_PHYSICAL_GPU_QUEUE_PROPERTIES> queues;
+	queues.resize(dataSize / sizeof(GR_PHYSICAL_GPU_QUEUE_PROPERTIES));
+	
+	result = grGetGpuInfo(gpu, GR_INFO_TYPE_PHYSICAL_GPU_QUEUE_PROPERTIES, &dataSize, &queues[0]);
+
+	std::cout << "\tGR_INFO_TYPE_PHYSICAL_GPU_QUEUE_PROPERTIES:" << std::endl;
+
+	for (int q = 0; q < queues.size(); q++) {
+		auto queue = queues[q];
+		std::cout << "\t\tqueue #" << q << ":" << std::endl;
+		std::cout << "\t\t\tqueueType = " << enumToString(queue.queueType) << std::endl;
+		std::cout << "\t\t\tqueueCount = " << queue.queueCount << std::endl;
+		std::cout << "\t\t\tmaxAtomicCounters = " << queue.maxAtomicCounters << std::endl;
+		std::cout << "\t\t\tsupportsTimestamps = " << std::boolalpha << queue.supportsTimestamps << std::endl;
+	}
+
+	/*
+		Create device and queue
+	*/
 
 	// Describe queue needed for device
 	GR_DEVICE_QUEUE_CREATE_INFO queueInfo = {};
 	queueInfo.queueType = GR_QUEUE_UNIVERSAL;
 	queueInfo.queueCount = 1;
 
-	// WSI extension needs to be initialized for presentation
 	static const GR_CHAR* const ppExtensions[] = {
 		"GR_WSI_WINDOWS",
 	};
@@ -56,19 +138,17 @@ int main() {
 	deviceInfo.extensionCount = 1;
 	deviceInfo.ppEnabledExtensionNames = ppExtensions;
 
-	// Enable validation layer
 	deviceInfo.maxValidationLevel = GR_VALIDATION_LEVEL_4;
 	deviceInfo.flags |= GR_DEVICE_CREATE_VALIDATION;
 
-	// Create device
-	GR_DEVICE device = GR_NULL_HANDLE;
-	result = grCreateDevice(gpus[0], &deviceInfo, &device);
+	GR_DEVICE device;
+	result = grCreateDevice(gpu, &deviceInfo, &device);
 
 	if (result != GR_SUCCESS) {
-		std::cerr << "grCreateDevice: error = " << std::hex << result << std::endl;
+		std::cerr << "grCreateDevice:\n\terror = " << std::hex << result << std::endl;
 		return 1;
 	} else {
-		std::cout << "grCreateDevice: created device handle for physical gpu" << std::endl;
+		std::cout << "grCreateDevice:\n\tcreated device handle for physical gpu" << std::endl;
 	}
 
 	return 0;
