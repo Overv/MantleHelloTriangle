@@ -1,6 +1,10 @@
 #ifndef MANTLE_H
 #define MANTLE_H
 
+#include <Windows.h>
+#include <stdint.h>
+#include <stdbool.h>
+
 /*
 	Types and constants
 */
@@ -372,60 +376,60 @@ typedef struct _GR_WSI_WIN_PRESENT_INFO {
 	API function pointers
 */
 
-typedef GR_RESULT (GR_STDCALL *grInitAndEnumerateGpusPtr)(
+GR_RESULT (GR_STDCALL *grInitAndEnumerateGpus)(
 	const GR_APPLICATION_INFO* pAppInfo,
 	const GR_ALLOC_CALLBACKS* pAllocCb,
 	GR_UINT* pGpuCount,
 	GR_PHYSICAL_GPU gpus[GR_MAX_PHYSICAL_GPUS]);
 
-typedef GR_RESULT (GR_STDCALL *grGetGpuInfoPtr)(
+GR_RESULT (GR_STDCALL *grGetGpuInfo)(
 	GR_PHYSICAL_GPU gpu,
 	GR_ENUM infoType,
 	GR_SIZE* pDataSize,
 	GR_VOID* pData);
 
-typedef GR_RESULT (GR_STDCALL *grGetExtensionSupportPtr)(
+GR_RESULT (GR_STDCALL *grGetExtensionSupport)(
 	GR_PHYSICAL_GPU gpu,
 	const GR_CHAR* pExtName);
 
-typedef GR_RESULT (GR_STDCALL *grCreateDevicePtr)(
+GR_RESULT (GR_STDCALL *grCreateDevice)(
 	GR_PHYSICAL_GPU gpu,
 	const GR_DEVICE_CREATE_INFO* pCreateInfo,
 	GR_DEVICE* pDevice);
 
-typedef GR_RESULT (GR_STDCALL *grWsiWinGetDisplaysPtr)(
+GR_RESULT (GR_STDCALL *grWsiWinGetDisplays)(
 	GR_DEVICE device,
 	GR_UINT* pDisplayCount,
 	GR_WSI_WIN_DISPLAY* pDisplayList);
 
-typedef GR_RESULT (GR_STDCALL *grWsiWinGetDisplayModeListPtr)(
+GR_RESULT (GR_STDCALL *grWsiWinGetDisplayModeList)(
 	GR_WSI_WIN_DISPLAY display,
 	GR_UINT* pDisplayModeCount,
 	GR_WSI_WIN_DISPLAY_MODE* pDisplayModeList);
 
-typedef GR_RESULT (GR_STDCALL *grGetDeviceQueuePtr)(
+GR_RESULT (GR_STDCALL *grGetDeviceQueue)(
 	GR_DEVICE device,
 	GR_ENUM queueType,
 	GR_UINT queueId,
 	GR_QUEUE* pQueue);
 
-typedef GR_RESULT (GR_STDCALL *grWsiWinCreatePresentableImagePtr)(
+GR_RESULT (GR_STDCALL *grWsiWinCreatePresentableImage)(
 	GR_DEVICE device,
 	const GR_WSI_WIN_PRESENTABLE_IMAGE_CREATE_INFO* pCreateInfo,
 	GR_IMAGE* pImage,
 	GR_GPU_MEMORY* pMem);
 
-typedef GR_RESULT (GR_STDCALL *grCreateCommandBufferPtr)(
+GR_RESULT (GR_STDCALL *grCreateCommandBuffer)(
 	GR_DEVICE device,
 	const GR_CMD_BUFFER_CREATE_INFO* pCreateInfo,
-	GR_CMD_BUFFER* pCmdBuffer);typedef GR_RESULT (GR_STDCALL *grBeginCommandBufferPtr)(
+	GR_CMD_BUFFER* pCmdBuffer);GR_RESULT (GR_STDCALL *grBeginCommandBuffer)(
 	GR_CMD_BUFFER cmdBuffer,
 	GR_FLAGS flags);
 
-typedef GR_RESULT (GR_STDCALL *grEndCommandBufferPtr)(
+GR_RESULT (GR_STDCALL *grEndCommandBuffer)(
 	GR_CMD_BUFFER cmdBuffer);
 
-typedef GR_RESULT (GR_STDCALL *grQueueSubmitPtr)(
+GR_RESULT (GR_STDCALL *grQueueSubmit)(
 	GR_QUEUE queue,
 	GR_UINT cmdBufferCount,
 	const GR_CMD_BUFFER* pCmdBuffers,
@@ -433,24 +437,58 @@ typedef GR_RESULT (GR_STDCALL *grQueueSubmitPtr)(
 	const GR_MEMORY_REF* pMemRefs,
 	GR_FENCE fence);
 
-typedef GR_VOID (GR_STDCALL *grCmdPrepareImagesPtr)(
+GR_VOID (GR_STDCALL *grCmdPrepareImages)(
 	GR_CMD_BUFFER cmdBuffer,
 	GR_UINT transitionCount,
 	const GR_IMAGE_STATE_TRANSITION* pStateTransitions);
 
-typedef GR_VOID(GR_STDCALL *grCmdClearColorImagePtr)(
+GR_VOID(GR_STDCALL *grCmdClearColorImage)(
 	GR_CMD_BUFFER cmdBuffer,
 	GR_IMAGE image,
 	const GR_FLOAT color[4],
 	GR_UINT rangeCount,
 	const GR_IMAGE_SUBRESOURCE_RANGE* pRanges);
 
-typedef GR_RESULT (GR_STDCALL *grWsiWinQueuePresentPtr)(
+GR_RESULT (GR_STDCALL *grWsiWinQueuePresent)(
 	GR_QUEUE queue,
 	const GR_WSI_WIN_PRESENT_INFO* pPresentInfo);
 
-typedef GR_RESULT (GR_STDCALL *grDbgRegisterMsgCallbackPtr)(
+GR_RESULT(GR_STDCALL *grDbgRegisterMsgCallback)(
 	GR_DBG_MSG_CALLBACK_FUNCTION pfnMsgCallback,
 	GR_VOID* pUserData);
+
+#define LOAD_PROC(fnCheck, module, var)\
+{\
+	var = (decltype(var)) GetProcAddress(module, #var);\
+	if (!var) fnCheck = false;\
+}\
+
+// Applications should call this at the beginning of the program
+bool mantleLoadFunctions() {
+	HMODULE mantleDll = LoadLibrary(TEXT("mantle64.dll"));
+	if (!mantleDll) return false;
+
+	bool fnCheck = true;
+
+	LOAD_PROC(fnCheck, mantleDll, grDbgRegisterMsgCallback);
+	LOAD_PROC(fnCheck, mantleDll, grInitAndEnumerateGpus);
+	LOAD_PROC(fnCheck, mantleDll, grGetGpuInfo);
+	LOAD_PROC(fnCheck, mantleDll, grGetExtensionSupport);
+	LOAD_PROC(fnCheck, mantleDll, grCreateDevice);
+	LOAD_PROC(fnCheck, mantleDll, grGetDeviceQueue);
+	LOAD_PROC(fnCheck, mantleDll, grCreateCommandBuffer);
+	LOAD_PROC(fnCheck, mantleDll, grBeginCommandBuffer);
+	LOAD_PROC(fnCheck, mantleDll, grEndCommandBuffer);
+	LOAD_PROC(fnCheck, mantleDll, grQueueSubmit);
+	LOAD_PROC(fnCheck, mantleDll, grCmdPrepareImages);
+	LOAD_PROC(fnCheck, mantleDll, grCmdClearColorImage);
+
+	LOAD_PROC(fnCheck, mantleDll, grWsiWinGetDisplays);
+	LOAD_PROC(fnCheck, mantleDll, grWsiWinGetDisplayModeList);
+	LOAD_PROC(fnCheck, mantleDll, grWsiWinCreatePresentableImage);
+	LOAD_PROC(fnCheck, mantleDll, grWsiWinQueuePresent);
+
+	return fnCheck;
+}
 
 #endif

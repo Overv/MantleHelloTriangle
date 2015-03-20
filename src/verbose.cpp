@@ -1,9 +1,9 @@
+#ifdef VERBOSE
+
 #include <iostream>
 #include <vector>
 #include <cstdint>
 #include <cassert>
-
-#include <Windows.h>
 
 #include <SDL.h>
 #include <SDL_syswm.h>
@@ -36,30 +36,10 @@ int main(int argc, char *args[]) {
 		Load library and function entry points
 	*/
 
-	HMODULE mantleDll = LoadLibrary(TEXT("mantle64.dll"));
-
-	if (!mantleDll) {
-		std::cerr << "error: no Mantle runtime available" << std::endl;
+	if (!mantleLoadFunctions()) {
+		std::cerr << "error: no Mantle library available or functions are missing!" << std::endl;
 		return 1;
 	}
-
-	grDbgRegisterMsgCallbackPtr grDbgRegisterMsgCallback = (grDbgRegisterMsgCallbackPtr) GetProcAddress(mantleDll, "grDbgRegisterMsgCallback");
-	grInitAndEnumerateGpusPtr grInitAndEnumerateGpus = (grInitAndEnumerateGpusPtr) GetProcAddress(mantleDll, "grInitAndEnumerateGpus");
-	grGetGpuInfoPtr grGetGpuInfo = (grGetGpuInfoPtr) GetProcAddress(mantleDll, "grGetGpuInfo");
-	grGetExtensionSupportPtr grGetExtensionSupport = (grGetExtensionSupportPtr) GetProcAddress(mantleDll, "grGetExtensionSupport");
-	grCreateDevicePtr grCreateDevice = (grCreateDevicePtr) GetProcAddress(mantleDll, "grCreateDevice");
-	grGetDeviceQueuePtr grGetDeviceQueue = (grGetDeviceQueuePtr) GetProcAddress(mantleDll, "grGetDeviceQueue");
-	grCreateCommandBufferPtr grCreateCommandBuffer = (grCreateCommandBufferPtr) GetProcAddress(mantleDll, "grCreateCommandBuffer");
-	grBeginCommandBufferPtr grBeginCommandBuffer = (grBeginCommandBufferPtr) GetProcAddress(mantleDll, "grBeginCommandBuffer");
-	grEndCommandBufferPtr grEndCommandBuffer = (grEndCommandBufferPtr) GetProcAddress(mantleDll, "grEndCommandBuffer");
-	grQueueSubmitPtr grQueueSubmit = (grQueueSubmitPtr) GetProcAddress(mantleDll, "grQueueSubmit");
-	grCmdPrepareImagesPtr grCmdPrepareImages = (grCmdPrepareImagesPtr) GetProcAddress(mantleDll, "grCmdPrepareImages");
-	grCmdClearColorImagePtr grCmdClearColorImage = (grCmdClearColorImagePtr) GetProcAddress(mantleDll, "grCmdClearColorImage");
-
-	grWsiWinGetDisplaysPtr grWsiWinGetDisplays = (grWsiWinGetDisplaysPtr) GetProcAddress(mantleDll, "grWsiWinGetDisplays");
-	grWsiWinGetDisplayModeListPtr grWsiWinGetDisplayModeList = (grWsiWinGetDisplayModeListPtr) GetProcAddress(mantleDll, "grWsiWinGetDisplayModeList");
-	grWsiWinCreatePresentableImagePtr grWsiWinCreatePresentableImage = (grWsiWinCreatePresentableImagePtr) GetProcAddress(mantleDll, "grWsiWinCreatePresentableImage");
-	grWsiWinQueuePresentPtr grWsiWinQueuePresent = (grWsiWinQueuePresentPtr) GetProcAddress(mantleDll, "grWsiWinQueuePresent");
 
 	/*
 		First set a debug callback
@@ -317,14 +297,7 @@ int main(int argc, char *args[]) {
 		// Clear image
 		float clearColor[] = {1.0, 0.0, 0.0, 1.0};
 
-		GR_IMAGE_SUBRESOURCE_RANGE range;
-		range.aspect = GR_IMAGE_ASPECT_COLOR;
-		range.baseMipLevel = 0;
-		range.mipLevels = 1;
-		range.baseArraySlice = 0;
-		range.arraySize = 1;
-
-		grCmdClearColorImage(clearCmdBuffer, image, clearColor, 1, &range);
+		grCmdClearColorImage(clearCmdBuffer, image, clearColor, 1, &colorRange);
 
 		// Transition image back into presentable state
 		GR_IMAGE_STATE_TRANSITION presentTransition = {};
@@ -383,3 +356,5 @@ int main(int argc, char *args[]) {
 
 	return 0;
 }
+
+#endif
