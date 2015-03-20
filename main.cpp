@@ -1,9 +1,17 @@
 #include <iostream>
 #include <vector>
 #include <cstdint>
+#include <cassert>
 
 #include <Windows.h>
+
+#include <SDL.h>
+#include <SDL_syswm.h>
+
 #include "mantle.h"
+
+const int WIDTH = 1280;
+const int HEIGHT = 720;
 
 const char* enumToString(int32_t type) {
 	switch (type) {
@@ -19,7 +27,7 @@ const char* enumToString(int32_t type) {
 	}
 }
 
-int main() {
+int main(int argc, char *args[]) {
 	/*
 		Load library and function entry points
 	*/
@@ -35,11 +43,18 @@ int main() {
 	grGetGpuInfoPtr grGetGpuInfo = (grGetGpuInfoPtr) GetProcAddress(mantleDll, "grGetGpuInfo");
 	grGetExtensionSupportPtr grGetExtensionSupport = (grGetExtensionSupportPtr) GetProcAddress(mantleDll, "grGetExtensionSupport");
 	grCreateDevicePtr grCreateDevice = (grCreateDevicePtr) GetProcAddress(mantleDll, "grCreateDevice");
+	grGetDeviceQueuePtr grGetDeviceQueue = (grGetDeviceQueuePtr) GetProcAddress(mantleDll, "grGetDeviceQueue");
+	grCreateCommandBufferPtr grCreateCommandBuffer = (grCreateCommandBufferPtr) GetProcAddress(mantleDll, "grCreateCommandBuffer");
+	grBeginCommandBufferPtr grBeginCommandBuffer = (grBeginCommandBufferPtr) GetProcAddress(mantleDll, "grBeginCommandBuffer");
+	grEndCommandBufferPtr grEndCommandBuffer = (grEndCommandBufferPtr) GetProcAddress(mantleDll, "grEndCommandBuffer");
+	grQueueSubmitPtr grQueueSubmit = (grQueueSubmitPtr) GetProcAddress(mantleDll, "grQueueSubmit");
+	grCmdPrepareImagesPtr grCmdPrepareImages = (grCmdPrepareImagesPtr) GetProcAddress(mantleDll, "grCmdPrepareImages");
+	grCmdClearColorImagePtr grCmdClearColorImage = (grCmdClearColorImagePtr) GetProcAddress(mantleDll, "grCmdClearColorImage");
 
-	if (!grInitAndEnumerateGpus || !grGetGpuInfo || !grGetExtensionSupport || !grCreateDevice) {
-		std::cerr << "error: couldn't locate (some) Mantle functions" << std::endl;
-		return 1;
-	}
+	grWsiWinGetDisplaysPtr grWsiWinGetDisplays = (grWsiWinGetDisplaysPtr) GetProcAddress(mantleDll, "grWsiWinGetDisplays");
+	grWsiWinGetDisplayModeListPtr grWsiWinGetDisplayModeList = (grWsiWinGetDisplayModeListPtr) GetProcAddress(mantleDll, "grWsiWinGetDisplayModeList");
+	grWsiWinCreatePresentableImagePtr grWsiWinCreatePresentableImage = (grWsiWinCreatePresentableImagePtr) GetProcAddress(mantleDll, "grWsiWinCreatePresentableImage");
+	grWsiWinQueuePresentPtr grWsiWinQueuePresent = (grWsiWinQueuePresentPtr) GetProcAddress(mantleDll, "grWsiWinQueuePresent");
 
 	/*
 		Find Mantle compatible GPU
@@ -132,9 +147,6 @@ int main() {
 		std::cout << "grGetExtensionSupport:\n\tWindows extension is supported" << std::endl;
 	}
 
-	grWsiWinGetDisplaysPtr grWsiWinGetDisplays = (grWsiWinGetDisplaysPtr) GetProcAddress(mantleDll, "grWsiWinGetDisplays");
-	grWsiWinGetDisplayModeListPtr grWsiWinGetDisplayModeList = (grWsiWinGetDisplayModeListPtr) GetProcAddress(mantleDll, "grWsiWinGetDisplayModeList");
-
 	/*
 		Create device and queue
 	*/
@@ -192,6 +204,171 @@ int main() {
 
 		std::cout << "\t\t" << displayModeCount << " supported modes" << std::endl;
 	}
+
+	/*
+		Create a presentable image
+	*/
+
+	GR_WSI_WIN_PRESENTABLE_IMAGE_CREATE_INFO imageCreateInfo = {};
+
+	imageCreateInfo.format = {
+		GR_CH_FMT_R8G8B8A8,
+		GR_NUM_FMT_UNORM
+	};
+	imageCreateInfo.usage = GR_IMAGE_USAGE_COLOR_TARGET;
+	imageCreateInfo.extent = {WIDTH, HEIGHT};
+	imageCreateInfo.display = 0;
+
+	GR_IMAGE image;
+	GR_GPU_MEMORY imageMemory;
+	result = grWsiWinCreatePresentableImage(device, &imageCreateInfo, &image, &imageMemory);
+
+	if (result != GR_SUCCESS) {
+		std::cerr << "grWsiWinCreatePresentableImage:\n\terror = " << std::hex << result << std::endl;
+		return 1;
+	} else {
+		std::cout << "grWsiWinCreatePresentableImage:\n\tcreated a presentable image" << std::endl;
+	}
+
+	/*
+		Get a handle for the universal queue
+	*/
+
+	GR_QUEUE universalQueue;;
+	result = grGetDeviceQueue(device, GR_QUEUE_UNIVERSAL, 0, &universalQueue);
+
+	if (result != GR_SUCCESS) {
+		std::cerr << "grGetDeviceQueue:\n\terror = " << std::hex << result << std::endl;
+		return 1;
+	} else {
+		std::cout << "grGetDeviceQueue:\n\tretrieved handle for universal queue" << std::endl;
+	}
+
+	/*
+		Create command buffer that initialises the image
+	*/
+
+	GR_CMD_BUFFER_CREATE_INFO bufferCreateInfo = {};
+	bufferCreateInfo.queueType = GR_QUEUE_UNIVERSAL;
+
+	GR_CMD_BUFFER initCmdBuffer;
+	assert(grCreateCommandBuffer(device, &bufferCreateInfo, &initCmdBuffer) == GR_SUCCESS);
+
+	assert(grBeginCommandBuffer(initCmdBuffer, 0) == GR_SUCCESS);
+
+		GR_IMAGE_SUBRESOURCE_RANGE colorRange;
+		colorRange.aspect = GR_IMAGE_ASPECT_COLOR;
+		colorRange.baseMipLevel = 0;
+		colorRange.mipLevels = 1;
+		colorRange.baseArraySlice = 0;
+		colorRange.arraySize = 1;
+
+		GR_IMAGE_STATE_TRANSITION initTransition = {};
+		initTransition.image = image;
+		initTransition.oldState = GR_IMAGE_STATE_UNINITIALIZED;
+		initTransition.newState = GR_WSI_WIN_IMAGE_STATE_PRESENT_WINDOWED;
+		initTransition.subresourceRange = colorRange;
+
+		grCmdPrepareImages(initCmdBuffer, 1, &initTransition);
+
+	assert(grEndCommandBuffer(initCmdBuffer) == GR_SUCCESS);
+
+	GR_MEMORY_REF imageMemoryRef = {};
+	imageMemoryRef.mem = imageMemory;
+
+	result = grQueueSubmit(universalQueue, 1, &initCmdBuffer, 1, &imageMemoryRef, 0);
+
+	if (result != GR_SUCCESS) {
+		std::cerr << "grQueueSubmit:\n\terror = " << std::hex << result << std::endl;
+		return 1;
+	} else {
+		std::cout << "grQueueSubmit:\n\tsubmitted command to initialize image as presentable" << std::endl;
+	}
+
+	/*
+		Create command buffer to clear image to a color
+	*/
+
+	GR_CMD_BUFFER clearCmdBuffer;
+	assert(grCreateCommandBuffer(device, &bufferCreateInfo, &clearCmdBuffer) == GR_SUCCESS);
+
+	assert(grBeginCommandBuffer(clearCmdBuffer, 0) == GR_SUCCESS);
+
+		// Transition image to clearable state
+		GR_IMAGE_STATE_TRANSITION clearTransition = {};
+		clearTransition.image = image;
+		clearTransition.oldState = GR_WSI_WIN_IMAGE_STATE_PRESENT_WINDOWED;
+		clearTransition.newState = GR_IMAGE_STATE_CLEAR;
+		clearTransition.subresourceRange = colorRange;
+
+		grCmdPrepareImages(clearCmdBuffer, 1, &clearTransition);
+
+		// Clear image
+		float clearColor[] = {1.0, 0.0, 0.0, 1.0};
+
+		GR_IMAGE_SUBRESOURCE_RANGE range;
+		range.aspect = GR_IMAGE_ASPECT_COLOR;
+		range.baseMipLevel = 0;
+		range.mipLevels = 1;
+		range.baseArraySlice = 0;
+		range.arraySize = 1;
+
+		grCmdClearColorImage(clearCmdBuffer, image, clearColor, 1, &range);
+
+		// Transition image back into presentable state
+		GR_IMAGE_STATE_TRANSITION presentTransition = {};
+		presentTransition.image = image;
+		presentTransition.oldState = GR_IMAGE_STATE_CLEAR;
+		presentTransition.newState = GR_WSI_WIN_IMAGE_STATE_PRESENT_WINDOWED;
+		presentTransition.subresourceRange = colorRange;
+
+		grCmdPrepareImages(clearCmdBuffer, 1, &presentTransition);
+
+	result = grEndCommandBuffer(clearCmdBuffer);
+
+	if (result != GR_SUCCESS) {
+		std::cerr << "grEndCommandBuffer:\n\terror = " << std::hex << result << std::endl;
+		return 1;
+	} else {
+		std::cout << "grEndCommandBuffer:\n\tbuilt command buffer to clear screen to color" << std::endl;
+	}
+
+	/*
+		Create window to draw on
+	*/
+
+	SDL_Init(SDL_INIT_VIDEO);
+
+	SDL_Window* window = SDL_CreateWindow("Mantle demo", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WIDTH, HEIGHT, 0);
+
+	// Retrieve HWND to pass to Mantle
+	SDL_SysWMinfo wmInfo;
+	SDL_VERSION(&wmInfo.version);
+	SDL_GetWindowWMInfo(window, &wmInfo);
+
+	HWND windowHandle = wmInfo.info.win.window;
+	std::cout << "Created window using SDL:\n\tHWND = " << windowHandle << std::endl;
+
+	SDL_Event windowEvent;
+	while (true) {
+		if (SDL_PollEvent(&windowEvent)) {
+			if (windowEvent.type == SDL_QUIT) break;
+		}
+
+		// Submit command buffer that clears the image
+		assert(grQueueSubmit(universalQueue, 1, &clearCmdBuffer, 1, &imageMemoryRef, 0) == GR_SUCCESS);
+
+		// Present image to the window
+		GR_WSI_WIN_PRESENT_INFO presentInfo = {};
+		presentInfo.hWndDest = windowHandle;
+		presentInfo.srcImage = image;
+		presentInfo.presentMode = GR_WSI_WIN_PRESENT_MODE_WINDOWED;
+		presentInfo.presentInterval = 0;
+
+		assert(grWsiWinQueuePresent(universalQueue, &presentInfo) == GR_SUCCESS);
+	}
+
+	SDL_Quit();
 
 	return 0;
 }

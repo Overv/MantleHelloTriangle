@@ -1,32 +1,41 @@
-#ifndef MANTLE_HPP
-#define MANTLE_HPP
+#ifndef MANTLE_H
+#define MANTLE_H
 
 /*
 	Types and constants
 */
 
-#define GR_CHAR char
-#define GR_UINT32 uint32_t
-#define GR_UINT64 uint64_t
-#define GR_FLOAT float
-#define GR_BOOL uint32_t
-#define GR_VOID void
-#define GR_SIZE size_t
-#define GR_UINT8 uint8_t
-#define GR_INT int32_t
-#define GR_UINT uint32_t
-#define GR_ENUM int32_t
-#define GR_FLAGS int32_t
-#define GR_PHYSICAL_GPU uint64_t
-#define GR_DEVICE uint64_t
-#define GR_WSI_WIN_DISPLAY uint64_t
-#define GR_MAX_PHYSICAL_GPUS 4
+typedef char GR_CHAR;
+typedef int32_t GR_INT;
+typedef uint32_t GR_UINT;
+typedef uint8_t GR_UINT8;
+typedef uint32_t GR_UINT32;
+typedef uint64_t GR_UINT64;
+typedef float GR_FLOAT;
+typedef uint32_t GR_BOOL;
+typedef void GR_VOID;
 
-#define GR_API_VERSION 1
+typedef size_t GR_SIZE;
+typedef size_t GR_GPU_SIZE;
+
+typedef int32_t GR_ENUM;
+typedef int32_t GR_FLAGS;
+typedef uint64_t GR_PHYSICAL_GPU;
+typedef uint64_t GR_DEVICE;
+typedef uint64_t GR_WSI_WIN_DISPLAY;
+typedef uint64_t GR_QUEUE;
+typedef uint64_t GR_IMAGE;
+typedef uint64_t GR_GPU_MEMORY;
+typedef uint64_t GR_CMD_BUFFER;
+typedef uint64_t GR_FENCE;
+
+const int GR_MAX_PHYSICAL_GPUS = 4;
+const int GR_API_VERSION = 1;
+const int GR_MAX_PHYSICAL_GPU_NAME = 255; // Guess
 
 #define GR_STDCALL __stdcall
 
-typedef enum {
+typedef enum _GR_RESULT {
 	GR_SUCCESS = 0x10000,
 	GR_UNSUPPORTED,
 	GR_NOT_READY,
@@ -155,9 +164,66 @@ typedef enum _GR_NUM_FORMAT {
 	GR_NUM_FMT_DS
 } GR_NUM_FORMAT;
 
-// Guesses
-#define GR_GPU_SIZE size_t
-#define GR_MAX_PHYSICAL_GPU_NAME 255
+typedef enum _GR_IMAGE_USAGE_FLAGS {
+	GR_IMAGE_USAGE_SHADER_ACCESS_READ = 0x00000001,
+	GR_IMAGE_USAGE_SHADER_ACCESS_WRITE = 0x00000002,
+	GR_IMAGE_USAGE_COLOR_TARGET = 0x00000004,
+	GR_IMAGE_USAGE_DEPTH_STENCIL = 0x00000008,
+} GR_IMAGE_USAGE_FLAGS;
+
+typedef enum _GR_WSI_WIN_IMAGE_CREATE_FLAGS {
+	GR_WSI_WIN_IMAGE_CREATE_FULLSCREEN_PRESENT = 0x00000001,
+	GR_WSI_WIN_IMAGE_CREATE_STEREO = 0x00000002,
+} GR_WSI_WIN_IMAGE_CREATE_FLAGS;
+
+typedef enum _GR_CMD_BUFFER_BUILD_FLAGS {
+	GR_CMD_BUFFER_OPTIMIZE_GPU_SMALL_BATCH = 0x00000001,
+	GR_CMD_BUFFER_OPTIMIZE_PIPELINE_SWITCH = 0x00000002,
+	GR_CMD_BUFFER_OPTIMIZE_ONE_TIME_SUBMIT = 0x00000004,
+	GR_CMD_BUFFER_OPTIMIZE_DESCRIPTOR_SET_SWITCH = 0x00000008,
+} GR_CMD_BUFFER_BUILD_FLAGS;
+
+typedef enum _GR_IMAGE_STATE {
+	GR_IMAGE_STATE_DATA_TRANSFER = 0x1300,
+	GR_IMAGE_STATE_GRAPHICS_SHADER_READ_ONLY = 0x1301,
+	GR_IMAGE_STATE_GRAPHICS_SHADER_WRITE_ONLY = 0x1302,
+	GR_IMAGE_STATE_GRAPHICS_SHADER_READ_WRITE = 0x1303,
+	GR_IMAGE_STATE_COMPUTE_SHADER_READ_ONLY = 0x1304,
+	GR_IMAGE_STATE_COMPUTE_SHADER_WRITE_ONLY = 0x1305,
+	GR_IMAGE_STATE_COMPUTE_SHADER_READ_WRITE = 0x1306,
+	GR_IMAGE_STATE_MULTI_SHADER_READ_ONLY = 0x1307,
+	GR_IMAGE_STATE_TARGET_AND_SHADER_READ_ONLY = 0x1308,
+	GR_IMAGE_STATE_UNINITIALIZED = 0x1309,
+	GR_IMAGE_STATE_TARGET_RENDER_ACCESS_OPTIMAL = 0x130a,
+	GR_IMAGE_STATE_TARGET_SHADER_ACCESS_OPTIMAL = 0x130b,
+	GR_IMAGE_STATE_CLEAR = 0x130c,
+	GR_IMAGE_STATE_RESOLVE_SOURCE = 0x130d,
+	GR_IMAGE_STATE_RESOLVE_DESTINATION = 0x130e,
+	GR_IMAGE_STATE_DISCARD = 0x131f,
+	GR_IMAGE_STATE_DATA_TRANSFER_SOURCE = 0x1310,
+	GR_IMAGE_STATE_DATA_TRANSFER_DESTINATION = 0x1311,
+} GR_IMAGE_STATE;
+
+typedef enum _GR_WSI_WIN_IMAGE_STATE {
+	GR_WSI_WIN_IMAGE_STATE_PRESENT_WINDOWED = 0x00200000,
+	GR_WSI_WIN_IMAGE_STATE_PRESENT_FULLSCREEN = 0x00200001,
+} GR_WSI_WIN_IMAGE_STATE;
+
+typedef enum _GR_IMAGE_ASPECT {
+	GR_IMAGE_ASPECT_COLOR = 0x1700,
+	GR_IMAGE_ASPECT_DEPTH = 0x1701,
+	GR_IMAGE_ASPECT_STENCIL = 0x1702,
+} GR_IMAGE_ASPECT;
+
+typedef enum _GR_WSI_WIN_PRESENT_MODE {
+	GR_WSI_WIN_PRESENT_MODE_WINDOWED = 0x00200200,
+	GR_WSI_WIN_PRESENT_MODE_FULLSCREEN = 0x00200201,
+} GR_WSI_WIN_PRESENT_MODE;
+
+typedef enum _GR_WSI_WIN_PRESENT_FLAGS {
+	GR_WSI_WIN_PRESENT_FULLSCREEN_DONOTWAIT = 0x00000001,
+	GR_WSI_WIN_PRESENT_FULLSCREEN_STEREO = 0x00000002,
+} GR_WSI_WIN_PRESENT_FLAGS;
 
 /*
 	Callback functions
@@ -251,6 +317,47 @@ typedef struct _GR_WSI_WIN_DISPLAY_MODE {
 	GR_BOOL crossDisplayPresent;
 } GR_WSI_WIN_DISPLAY_MODE;
 
+typedef struct _GR_WSI_WIN_PRESENTABLE_IMAGE_CREATE_INFO {
+	GR_FORMAT format;
+	GR_FLAGS usage;
+	GR_EXTENT2D extent;
+	GR_WSI_WIN_DISPLAY display;
+	GR_FLAGS flags;
+} GR_WSI_WIN_PRESENTABLE_IMAGE_CREATE_INFO;
+
+typedef struct _GR_CMD_BUFFER_CREATE_INFO {
+	GR_ENUM queueType;
+	GR_FLAGS flags;
+} GR_CMD_BUFFER_CREATE_INFO;
+
+typedef struct _GR_MEMORY_REF {
+	GR_GPU_MEMORY mem;
+	GR_FLAGS flags;
+} GR_MEMORY_REF;
+
+typedef struct _GR_IMAGE_SUBRESOURCE_RANGE {
+	GR_ENUM aspect;
+	GR_UINT baseMipLevel;
+	GR_UINT mipLevels;
+	GR_UINT baseArraySlice;
+	GR_UINT arraySize;
+} GR_IMAGE_SUBRESOURCE_RANGE;
+
+typedef struct _GR_IMAGE_STATE_TRANSITION {
+	GR_IMAGE image;
+	GR_ENUM oldState;
+	GR_ENUM newState;
+	GR_IMAGE_SUBRESOURCE_RANGE subresourceRange;
+} GR_IMAGE_STATE_TRANSITION;
+
+typedef struct _GR_WSI_WIN_PRESENT_INFO {
+	HWND hWndDest;
+	GR_IMAGE srcImage;
+	GR_ENUM presentMode;
+	GR_UINT presentInterval;
+	GR_FLAGS flags;
+} GR_WSI_WIN_PRESENT_INFO;
+
 /*
 	API function pointers
 */
@@ -285,5 +392,51 @@ typedef GR_RESULT (GR_STDCALL *grWsiWinGetDisplayModeListPtr)(
 	GR_WSI_WIN_DISPLAY display,
 	GR_UINT* pDisplayModeCount,
 	GR_WSI_WIN_DISPLAY_MODE* pDisplayModeList);
+
+typedef GR_RESULT (GR_STDCALL *grGetDeviceQueuePtr)(
+	GR_DEVICE device,
+	GR_ENUM queueType,
+	GR_UINT queueId,
+	GR_QUEUE* pQueue);
+
+typedef GR_RESULT (GR_STDCALL *grWsiWinCreatePresentableImagePtr)(
+	GR_DEVICE device,
+	const GR_WSI_WIN_PRESENTABLE_IMAGE_CREATE_INFO* pCreateInfo,
+	GR_IMAGE* pImage,
+	GR_GPU_MEMORY* pMem);
+
+typedef GR_RESULT (GR_STDCALL *grCreateCommandBufferPtr)(
+	GR_DEVICE device,
+	const GR_CMD_BUFFER_CREATE_INFO* pCreateInfo,
+	GR_CMD_BUFFER* pCmdBuffer);typedef GR_RESULT (GR_STDCALL *grBeginCommandBufferPtr)(
+	GR_CMD_BUFFER cmdBuffer,
+	GR_FLAGS flags);
+
+typedef GR_RESULT (GR_STDCALL *grEndCommandBufferPtr)(
+	GR_CMD_BUFFER cmdBuffer);
+
+typedef GR_RESULT (GR_STDCALL *grQueueSubmitPtr)(
+	GR_QUEUE queue,
+	GR_UINT cmdBufferCount,
+	const GR_CMD_BUFFER* pCmdBuffers,
+	GR_UINT memRefCount,
+	const GR_MEMORY_REF* pMemRefs,
+	GR_FENCE fence);
+
+typedef GR_VOID (GR_STDCALL *grCmdPrepareImagesPtr)(
+	GR_CMD_BUFFER cmdBuffer,
+	GR_UINT transitionCount,
+	const GR_IMAGE_STATE_TRANSITION* pStateTransitions);
+
+typedef GR_VOID(GR_STDCALL *grCmdClearColorImagePtr)(
+	GR_CMD_BUFFER cmdBuffer,
+	GR_IMAGE image,
+	const GR_FLOAT color[4],
+	GR_UINT rangeCount,
+	const GR_IMAGE_SUBRESOURCE_RANGE* pRanges);
+
+typedef GR_RESULT (GR_STDCALL *grWsiWinQueuePresentPtr)(
+	GR_QUEUE queue,
+	const GR_WSI_WIN_PRESENT_INFO* pPresentInfo);
 
 #endif
