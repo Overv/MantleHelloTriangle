@@ -27,6 +27,10 @@ const char* enumToString(int32_t type) {
 	}
 }
 
+GR_VOID GR_STDCALL debugCallback(GR_ENUM type, GR_ENUM level, GR_BASE_OBJECT obj, GR_SIZE location, GR_ENUM msgCode, const GR_CHAR* msg, GR_VOID* userData) {
+	std::cerr << "debug message: " << msg << std::endl;
+}
+
 int main(int argc, char *args[]) {
 	/*
 		Load library and function entry points
@@ -39,6 +43,7 @@ int main(int argc, char *args[]) {
 		return 1;
 	}
 
+	grDbgRegisterMsgCallbackPtr grDbgRegisterMsgCallback = (grDbgRegisterMsgCallbackPtr) GetProcAddress(mantleDll, "grDbgRegisterMsgCallback");
 	grInitAndEnumerateGpusPtr grInitAndEnumerateGpus = (grInitAndEnumerateGpusPtr) GetProcAddress(mantleDll, "grInitAndEnumerateGpus");
 	grGetGpuInfoPtr grGetGpuInfo = (grGetGpuInfoPtr) GetProcAddress(mantleDll, "grGetGpuInfo");
 	grGetExtensionSupportPtr grGetExtensionSupport = (grGetExtensionSupportPtr) GetProcAddress(mantleDll, "grGetExtensionSupport");
@@ -55,6 +60,12 @@ int main(int argc, char *args[]) {
 	grWsiWinGetDisplayModeListPtr grWsiWinGetDisplayModeList = (grWsiWinGetDisplayModeListPtr) GetProcAddress(mantleDll, "grWsiWinGetDisplayModeList");
 	grWsiWinCreatePresentableImagePtr grWsiWinCreatePresentableImage = (grWsiWinCreatePresentableImagePtr) GetProcAddress(mantleDll, "grWsiWinCreatePresentableImage");
 	grWsiWinQueuePresentPtr grWsiWinQueuePresent = (grWsiWinQueuePresentPtr) GetProcAddress(mantleDll, "grWsiWinQueuePresent");
+
+	/*
+		First set a debug callback
+	*/
+
+	grDbgRegisterMsgCallback(debugCallback, nullptr);
 
 	/*
 		Find Mantle compatible GPU

@@ -28,6 +28,7 @@ typedef uint64_t GR_IMAGE;
 typedef uint64_t GR_GPU_MEMORY;
 typedef uint64_t GR_CMD_BUFFER;
 typedef uint64_t GR_FENCE;
+typedef uint64_t GR_BASE_OBJECT;
 
 const int GR_MAX_PHYSICAL_GPUS = 4;
 const int GR_API_VERSION = 1;
@@ -237,6 +238,15 @@ typedef GR_VOID* (GR_STDCALL *GR_ALLOC_FUNCTION)(
 typedef GR_VOID(GR_STDCALL *GR_FREE_FUNCTION)(
 	GR_VOID* pMem);
 
+typedef GR_VOID(GR_STDCALL *GR_DBG_MSG_CALLBACK_FUNCTION)(
+	GR_ENUM msgType,
+	GR_ENUM validationLevel,
+	GR_BASE_OBJECT srcObject,
+	GR_SIZE location,
+	GR_ENUM msgCode,
+	const GR_CHAR* pMsg,
+	GR_VOID* pUserData);
+
 /*
 	Structures
 */
@@ -438,5 +448,9 @@ typedef GR_VOID(GR_STDCALL *grCmdClearColorImagePtr)(
 typedef GR_RESULT (GR_STDCALL *grWsiWinQueuePresentPtr)(
 	GR_QUEUE queue,
 	const GR_WSI_WIN_PRESENT_INFO* pPresentInfo);
+
+typedef GR_RESULT (GR_STDCALL *grDbgRegisterMsgCallbackPtr)(
+	GR_DBG_MSG_CALLBACK_FUNCTION pfnMsgCallback,
+	GR_VOID* pUserData);
 
 #endif
