@@ -7,7 +7,10 @@ API reference and reverse engineering public Mantle demos.
 The [reference](http://www.amd.com/Documents/Mantle-Programming-Guide-and-API-Reference.pdf)
 is used as primary resource, because it contains a full API reference and some
 sample code. Unfortunately it misses a lot of the constant definitions, like
-`GR_API_VERSION`, but these can be determined by disassembling the [Star Swarm Stress Test](http://store.steampowered.com/app/267130/) using a disassembler like [arkdasm](http://www.arkdasm.com/).
+`GR_API_VERSION`, but these can be determined by creating a proxy mantle64.dll
+that logs calls and the contents of structs. This approach is currently used
+on the [Star Swarm Stress Test](http://store.steampowered.com/app/267130/) to
+figure out what calls and data are needed to render a triangle on the screen.
 
 Status
 ======
@@ -22,3 +25,6 @@ There are two versions of the code: `main.cpp` and `verbose.cpp`. The code in
 what the steps to rendering something with Mantle are. The code in
 `verbose.cpp`, which can be enabled with the `VERBOSE` preprocessor definition,
 contains extra checks and prints extensive debug info as shown above.
+
+Once enough info and shader bytecode has been extracted from the aforementioned
+Mantle demo, the code here will be updated to render a (textured) triangle.
