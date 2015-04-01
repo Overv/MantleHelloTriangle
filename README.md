@@ -1,3 +1,11 @@
+Discontinued
+------------
+
+Unfortunately, there's no documentation available on the shader bytecode used
+in Mantle. There is a reference for the AMD Intermediate Language, but the
+Mantle bytecode is a variation on this. Without being able to write custom
+shaders, there's no point to trying to implement Hello Triangle.
+
 Introduction
 ============
 
