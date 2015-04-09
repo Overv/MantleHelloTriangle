@@ -11,29 +11,35 @@ sample code. Unfortunately it misses a lot of the constant definitions, like
 that logs calls and the contents of structs. This approach is currently used
 on the [Star Swarm Stress Test](http://store.steampowered.com/app/267130/) to
 figure out what calls and data are needed to render a triangle on the screen.
+Other values, like `GR_MAX_HEAPS` can be figured out by querying for the struct
+size with functions like `grGetObjectInfo`.
 
 The intermediate language used for Mantle shaders is a subset of AMD IL, for
 which CodeXL contains [a compiler](http://developer.amd.com/community/blog/2014/05/16/codexl-game-developers-analyze-hlsl-gcn/).
 The disassembly it outputs is incorrect, but the bytecode itself is valid.
-Mantle appears to accept bytecode from this compiler, but nothing has been
-rendered with it yet.
+Mantle appears to accept this code without problems.
 
 Status
 ------
 
-The code is currently capable of creating a window using the SDL library and
-clearing it to red using Mantle, while printing useful debug info.
+The code is capable of creating a window using the SDL library, clearing it to
+black and rendering a red triangle using Mantle.
 
-![Preview of running program](http://i.imgur.com/sx12ubq.png)
+![Preview of running program](http://i.imgur.com/pGsOlit.png)
 
-There are two versions of the code: `main.cpp` and `verbose.cpp`. The code in
-`main.cpp` is a minimalistic version of the code that makes it easier to see
-what the steps to rendering something with Mantle are. The code in
-`verbose.cpp`, which can be enabled with the `VERBOSE` preprocessor definition,
-contains extra checks and prints extensive debug info as shown above.
+The vertex data is currently hardcoded in the vertex shader, which uses the
+`SV_VertexID` built-in variable to select a position. The next step is to pass
+vertex data from the program using descriptor sets.
 
-Once enough info and shader bytecode has been extracted from the aforementioned
-Mantle demo, the code here will be updated to render a (textured) triangle.
+Shader compilation
+------------------
+
+Shaders are written in HLSL and compiled to AMD Intermediate Language using
+the `CodeXLAnalyzer.exe` tool included in CodeXL using the `--il` flag. A batch
+script for doing this is included in the `shaders` folder. The hex code on the
+right side can then be converted to a binary file using the `output2binary.py`
+script, which takes the IL output file name as parameter. The binaries can then
+be loaded into Mantle using `grCreateShader`, as is demonstrated in the code.
 
 License
 -------

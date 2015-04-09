@@ -56,7 +56,7 @@ const int GR_MAX_PHYSICAL_GPUS = 4;
 const int GR_API_VERSION = 1;
 const int GR_MAX_PHYSICAL_GPU_NAME = 255; // Guess
 const int GR_MAX_VIEWPORTS = 16; // Guess
-const int GR_MAX_MEMORY_HEAPS = 16; // Guess
+const int GR_MAX_MEMORY_HEAPS = 8;
 const int GR_MAX_COLOR_TARGETS = 16; // Guess
 const int GR_MAX_DESCRIPTOR_SETS = 2;
 
@@ -846,6 +846,24 @@ typedef struct _GR_DESCRIPTOR_SET_ATTACH_INFO {
 	GR_DESCRIPTOR_SET descriptorSet;
 	GR_UINT slotOffset;
 } GR_DESCRIPTOR_SET_ATTACH_INFO;
+
+typedef struct _GR_MEMORY_REQUIREMENTS {
+	GR_GPU_SIZE size;
+	GR_GPU_SIZE alignment;
+	GR_UINT heapCount;
+	GR_UINT heaps[GR_MAX_MEMORY_HEAPS];
+} GR_MEMORY_REQUIREMENTS;
+
+typedef struct _GR_MEMORY_HEAP_PROPERTIES {
+	GR_ENUM heapMemoryType;
+	GR_GPU_SIZE heapSize;
+	GR_GPU_SIZE pageSize;
+	GR_FLAGS flags;
+	GR_FLOAT gpuReadPerfRating;
+	GR_FLOAT gpuWritePerfRating;
+	GR_FLOAT cpuReadPerfRating;
+	GR_FLOAT cpuWritePerfRating;
+} GR_MEMORY_HEAP_PROPERTIES;
 
 /*
 API function pointers

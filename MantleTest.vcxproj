@@ -23,7 +23,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp" />
-    <ClCompile Include="src\verbose.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{BFE5E052-6504-49C1-A7B6-3500EE1DD0F3}</ProjectGuid>
