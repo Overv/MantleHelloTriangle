@@ -43,8 +43,6 @@ memory view into GPU memory filled with the following data:
         0.0, 0.0, 1.0, 1.0
     };
 
-The next step is to clean up the code.
-
 Shader compilation
 ------------------
 

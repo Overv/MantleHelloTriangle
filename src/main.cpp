@@ -22,6 +22,14 @@ float vertices[] = {
 	0.0, 0.0, 1.0, 1.0
 };
 
+GR_CMD_BUFFER_CREATE_INFO bufferCreateInfo = {GR_QUEUE_UNIVERSAL, 0};
+
+GR_MSAA_STATE_OBJECT msaaState;
+GR_VIEWPORT_STATE_OBJECT viewportState;
+GR_COLOR_BLEND_STATE_OBJECT colorBlendState;
+GR_DEPTH_STENCIL_STATE_OBJECT depthStencilState;
+GR_RASTER_STATE_OBJECT rasterState;
+
 GR_VOID GR_STDCALL debugCallback(GR_ENUM type, GR_ENUM level, GR_BASE_OBJECT obj, GR_SIZE location, GR_ENUM msgCode, const GR_CHAR* msg, GR_VOID* userData) {
 	std::cerr << "DEBUG: " << msg << std::endl;
 }
@@ -42,13 +50,64 @@ std::vector<char> loadShader(const std::string& filename) {
 	return data;
 }
 
-int main(int argc, char *args[]) {
-	// Initialize function pointers, much like GLEW in OpenGL
-	mantleLoadFunctions();
+GR_MEMORY_REF allocateObjectMemory(GR_DEVICE device, GR_OBJECT object) {
+	GR_MEMORY_REQUIREMENTS memReqs = {};
+	GR_SIZE memReqsSize = sizeof(memReqs);
+	grGetObjectInfo(object, GR_INFO_TYPE_MEMORY_REQUIREMENTS, &memReqsSize, &memReqs);
 
-	// Receive debug messages
-	grDbgRegisterMsgCallback(debugCallback, nullptr);
+	GR_MEMORY_HEAP_PROPERTIES heapProps = {};
+	GR_SIZE heapPropsSize = sizeof(heapProps);
+	grGetMemoryHeapInfo(device, memReqs.heaps[0], GR_INFO_TYPE_MEMORY_HEAP_PROPERTIES, &heapPropsSize, &heapProps);
 
+	GR_GPU_MEMORY memory;
+	GR_MEMORY_ALLOC_INFO allocInfo = {};
+	allocInfo.size = max(1, memReqs.size / heapProps.pageSize) * heapProps.pageSize;
+	allocInfo.alignment = 0;
+	allocInfo.memPriority = GR_MEMORY_PRIORITY_HIGH;
+	allocInfo.heapCount = 1;
+	allocInfo.heaps[0] = memReqs.heaps[0];
+	grAllocMemory(device, &allocInfo, &memory);
+
+	grBindObjectMemory(object, memory, 0);
+
+	GR_MEMORY_REF memoryRef = {};
+	memoryRef.mem = memory;
+
+	return memoryRef;
+}
+
+GR_GPU_MEMORY allocateMappableBuffer(GR_DEVICE device, GR_GPU_SIZE size) {
+	// Find CPU visible (mappable) heap
+	GR_UINT heapCount;
+	grGetMemoryHeapCount(device, &heapCount);
+
+	GR_MEMORY_HEAP_PROPERTIES heapProps = {};
+	GR_SIZE heapPropsSize = sizeof(heapProps);
+	GR_UINT suitableHeap = -1;
+
+	for (int i = 0; i < heapCount; i++) {
+		grGetMemoryHeapInfo(device, i, GR_INFO_TYPE_MEMORY_HEAP_PROPERTIES, &heapPropsSize, &heapProps);
+
+		if (heapProps.flags & GR_MEMORY_HEAP_CPU_VISIBLE) {
+			suitableHeap = i;
+			break;
+		}
+	}
+
+	// Allocate buffer in that heap with multiple of page size >= size
+	GR_GPU_MEMORY memory;
+	GR_MEMORY_ALLOC_INFO allocInfo = {};
+	allocInfo.size = max(1, size / heapProps.pageSize) * heapProps.pageSize;
+	allocInfo.alignment = 0;
+	allocInfo.memPriority = GR_MEMORY_PRIORITY_HIGH;
+	allocInfo.heapCount = 1;
+	allocInfo.heaps[0] = suitableHeap;
+	grAllocMemory(device, &allocInfo, &memory);
+
+	return memory;
+}
+
+void createDeviceAndQueue(GR_DEVICE& device, GR_QUEUE& universalQueue) {
 	// Find Mantle compatible GPU handles
 	GR_APPLICATION_INFO appInfo = {};
 	appInfo.apiVersion = GR_API_VERSION;
@@ -77,9 +136,12 @@ int main(int argc, char *args[]) {
 	deviceInfo.flags |= GR_DEVICE_CREATE_VALIDATION;
 	deviceInfo.maxValidationLevel = GR_VALIDATION_LEVEL_4;
 
-	GR_DEVICE device;
 	grCreateDevice(gpus[0], &deviceInfo, &device);
 
+	grGetDeviceQueue(device, GR_QUEUE_UNIVERSAL, 0, &universalQueue);
+}
+
+void initPresentableImage(GR_DEVICE device, GR_QUEUE commandQueue, GR_IMAGE& image, GR_MEMORY_REF& imageMemoryRef, GR_IMAGE_SUBRESOURCE_RANGE& imageColorRange) {
 	// Create image that can be presented
 	GR_WSI_WIN_PRESENTABLE_IMAGE_CREATE_INFO imageCreateInfo = {};
 	imageCreateInfo.format = {
@@ -89,28 +151,20 @@ int main(int argc, char *args[]) {
 	imageCreateInfo.usage = GR_IMAGE_USAGE_COLOR_TARGET;
 	imageCreateInfo.extent = {WIDTH, HEIGHT};
 
-	GR_IMAGE image;
 	GR_GPU_MEMORY imageMemory;
 	grWsiWinCreatePresentableImage(device, &imageCreateInfo, &image, &imageMemory);
 
-	GR_MEMORY_REF imageMemoryRef = {};
+	imageMemoryRef = {};
 	imageMemoryRef.mem = imageMemory;
 
-	GR_IMAGE_SUBRESOURCE_RANGE imageColorRange;
+	imageColorRange = {};
 	imageColorRange.aspect = GR_IMAGE_ASPECT_COLOR;
 	imageColorRange.baseMipLevel = 0;
 	imageColorRange.mipLevels = 1;
 	imageColorRange.baseArraySlice = 0;
 	imageColorRange.arraySize = 1;
 
-	// Get handle to universal queue
-	GR_QUEUE universalQueue;
-	grGetDeviceQueue(device, GR_QUEUE_UNIVERSAL, 0, &universalQueue);
-
 	// Create and submit command buffer that transitions the image to being presentable
-	GR_CMD_BUFFER_CREATE_INFO bufferCreateInfo = {};
-	bufferCreateInfo.queueType = GR_QUEUE_UNIVERSAL;
-
 	GR_CMD_BUFFER initCmdBuffer;
 	grCreateCommandBuffer(device, &bufferCreateInfo, &initCmdBuffer);
 
@@ -126,45 +180,19 @@ int main(int argc, char *args[]) {
 
 	grEndCommandBuffer(initCmdBuffer);
 
-	grQueueSubmit(universalQueue, 1, &initCmdBuffer, 1, &imageMemoryRef, 0);
+	grQueueSubmit(commandQueue, 1, &initCmdBuffer, 1, &imageMemoryRef, 0);
+}
 
-	// Create window to present to and retrieve its handle
-	SDL_Init(SDL_INIT_VIDEO);
-
-	SDL_Window* window = SDL_CreateWindow("Mantle Hello Triangle", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WIDTH, HEIGHT, 0);
-
-	// Describe presenting from image to window
-	GR_WSI_WIN_PRESENT_INFO presentInfo = {};
-	presentInfo.hWndDest = GetActiveWindow();
-	presentInfo.srcImage = image;
-	presentInfo.presentMode = GR_WSI_WIN_PRESENT_MODE_WINDOWED;
-
-	// Create fence for CPU synchronization with rendering
-	GR_FENCE fence;
-	GR_FENCE_CREATE_INFO fenceCreateInfo = {};
-	grCreateFence(device, &fenceCreateInfo, &fence);
-
-	// Create color target view
-	GR_COLOR_TARGET_VIEW colorTargetView;
-	GR_COLOR_TARGET_VIEW_CREATE_INFO colorTargetViewCreateInfo = {};
-	colorTargetViewCreateInfo.image = image;
-	colorTargetViewCreateInfo.arraySize = 1;
-	colorTargetViewCreateInfo.baseArraySlice = 0;
-	colorTargetViewCreateInfo.mipLevel = 0;
-	colorTargetViewCreateInfo.format.channelFormat = GR_CH_FMT_R8G8B8A8;
-	colorTargetViewCreateInfo.format.numericFormat = GR_NUM_FMT_UNORM;
-
-	grCreateColorTargetView(device, &colorTargetViewCreateInfo, &colorTargetView);
+void createTargetStates(GR_DEVICE device, GR_MSAA_STATE_OBJECT& msaaState, GR_VIEWPORT_STATE_OBJECT& viewportState,
+	GR_COLOR_BLEND_STATE_OBJECT& colorBlendState, GR_DEPTH_STENCIL_STATE_OBJECT& depthStencilState, GR_RASTER_STATE_OBJECT& rasterState) {
 
 	// Create target states
-	GR_MSAA_STATE_OBJECT msaaState;
 	GR_MSAA_STATE_CREATE_INFO msaaStateCreateInfo = {};
 	msaaStateCreateInfo.samples = 1;
 	msaaStateCreateInfo.sampleMask = 0xF; // RGBA bits
 
 	grCreateMsaaState(device, &msaaStateCreateInfo, &msaaState);
 
-	GR_VIEWPORT_STATE_OBJECT viewportState;
 	GR_VIEWPORT_STATE_CREATE_INFO viewportStateCreateInfo = {};
 	viewportStateCreateInfo.viewportCount = 1;
 	viewportStateCreateInfo.scissorEnable = GR_FALSE;
@@ -175,7 +203,6 @@ int main(int argc, char *args[]) {
 
 	grCreateViewportState(device, &viewportStateCreateInfo, &viewportState);
 
-	GR_COLOR_BLEND_STATE_OBJECT colorBlendState;
 	GR_COLOR_BLEND_STATE_CREATE_INFO blendStateCreateInfo = {};
 	blendStateCreateInfo.target[0].blendEnable = GR_TRUE;
 	blendStateCreateInfo.target[0].srcBlendColor = GR_BLEND_SRC_ALPHA;
@@ -188,7 +215,6 @@ int main(int argc, char *args[]) {
 
 	grCreateColorBlendState(device, &blendStateCreateInfo, &colorBlendState);
 
-	GR_DEPTH_STENCIL_STATE_OBJECT depthStencilState;
 	GR_DEPTH_STENCIL_STATE_CREATE_INFO depthStencilStateCreateInfo = {};
 	depthStencilStateCreateInfo.depthEnable = GR_FALSE;
 	depthStencilStateCreateInfo.stencilEnable = GR_FALSE;
@@ -208,43 +234,34 @@ int main(int argc, char *args[]) {
 
 	grCreateDepthStencilState(device, &depthStencilStateCreateInfo, &depthStencilState);
 
-	GR_RASTER_STATE_OBJECT rasterState;
 	GR_RASTER_STATE_CREATE_INFO rasterStateCreateInfo = {};
 	rasterStateCreateInfo.fillMode = GR_FILL_SOLID;
 	rasterStateCreateInfo.cullMode = GR_CULL_NONE;
 	rasterStateCreateInfo.frontFace = GR_FRONT_FACE_CCW;
 
 	grCreateRasterState(device, &rasterStateCreateInfo, &rasterState);
+}
 
+GR_SHADER createShader(GR_DEVICE device, const std::string& filename) {
+	GR_SHADER shader;
+	GR_SHADER_CREATE_INFO shaderCreateInfo = {};
+
+	auto vertexShaderCode = loadShader(filename);
+
+	shaderCreateInfo.pCode = vertexShaderCode.data();
+	shaderCreateInfo.codeSize = vertexShaderCode.size();
+
+	grCreateShader(device, &shaderCreateInfo, &shader);
+
+	return shader;
+}
+
+void createGraphicsPipeline(GR_DEVICE device, GR_PIPELINE& pipeline, GR_MEMORY_REF& pipelineMemRef) {
 	// Load shaders
-	GR_SHADER vertexShader;
-	GR_SHADER_CREATE_INFO vertexShaderCreateInfo = {};
+	GR_SHADER vertexShader = createShader(device, "shaders/vs.bin");
+	GR_SHADER fragShader = createShader(device, "shaders/ps.bin");
 
-	auto vertexShaderCode = loadShader("shaders/vs.bin");
-
-	vertexShaderCreateInfo.pCode = vertexShaderCode.data();
-	vertexShaderCreateInfo.codeSize = vertexShaderCode.size();
-
-	grCreateShader(device, &vertexShaderCreateInfo, &vertexShader);
-
-	GR_SHADER fragShader;
-	GR_SHADER_CREATE_INFO fragShaderCreateInfo = {};
-
-	auto fragShaderCode = loadShader("shaders/ps.bin");
-
-	fragShaderCreateInfo.pCode = fragShaderCode.data();
-	fragShaderCreateInfo.codeSize = fragShaderCode.size();
-
-	grCreateShader(device, &fragShaderCreateInfo, &fragShader);
-
-	// Create graphics pipeline
-	GR_PIPELINE pipeline;
-	GR_GRAPHICS_PIPELINE_CREATE_INFO pipelineCreateInfo = {};
-
-	pipelineCreateInfo.vs.shader = vertexShader;
-	pipelineCreateInfo.vs.linkConstBufferCount = 0;
-	pipelineCreateInfo.vs.dynamicMemoryViewMapping.slotObjectType = GR_SLOT_UNUSED;
-
+	// Specify descriptor slots
 	GR_DESCRIPTOR_SLOT_INFO vsDescriptorSlots[2];
 
 	vsDescriptorSlots[0].slotObjectType = GR_SLOT_SHADER_RESOURCE;
@@ -253,18 +270,21 @@ int main(int argc, char *args[]) {
 	vsDescriptorSlots[1].slotObjectType = GR_SLOT_SHADER_RESOURCE;
 	vsDescriptorSlots[1].shaderEntityIndex = 1;
 
-	pipelineCreateInfo.vs.descriptorSetMapping[0].descriptorCount = 2;
-	pipelineCreateInfo.vs.descriptorSetMapping[0].pDescriptorInfo = vsDescriptorSlots;
-
-	pipelineCreateInfo.ps.shader = fragShader;
-	pipelineCreateInfo.ps.linkConstBufferCount = 0;
-	pipelineCreateInfo.ps.dynamicMemoryViewMapping.slotObjectType = GR_SLOT_UNUSED;
-
 	GR_DESCRIPTOR_SLOT_INFO psDescriptorSlots[2];
 
 	psDescriptorSlots[0].slotObjectType = GR_SLOT_UNUSED;
 	psDescriptorSlots[1].slotObjectType = GR_SLOT_UNUSED;
 
+	// Create graphics pipeline
+	GR_GRAPHICS_PIPELINE_CREATE_INFO pipelineCreateInfo = {};
+
+	pipelineCreateInfo.vs.shader = vertexShader;
+	pipelineCreateInfo.vs.dynamicMemoryViewMapping.slotObjectType = GR_SLOT_UNUSED;
+	pipelineCreateInfo.vs.descriptorSetMapping[0].descriptorCount = 2;
+	pipelineCreateInfo.vs.descriptorSetMapping[0].pDescriptorInfo = vsDescriptorSlots;
+
+	pipelineCreateInfo.ps.shader = fragShader;
+	pipelineCreateInfo.ps.dynamicMemoryViewMapping.slotObjectType = GR_SLOT_UNUSED;
 	pipelineCreateInfo.ps.descriptorSetMapping[0].descriptorCount = 2;
 	pipelineCreateInfo.ps.descriptorSetMapping[0].pDescriptorInfo = psDescriptorSlots;
 
@@ -284,69 +304,27 @@ int main(int argc, char *args[]) {
 
 	grCreateGraphicsPipeline(device, &pipelineCreateInfo, &pipeline);
 
-	// Allocate memory for pipeline
-	GR_MEMORY_REQUIREMENTS memReqs = {};
-	GR_SIZE memReqsSize = sizeof(memReqs);
-	grGetObjectInfo(pipeline, GR_INFO_TYPE_MEMORY_REQUIREMENTS, &memReqsSize, &memReqs);
+	pipelineMemRef = allocateObjectMemory(device, pipeline);
+}
 
-	GR_MEMORY_HEAP_PROPERTIES heapProps = {};
-	GR_SIZE heapPropsSize = sizeof(heapProps);
-	grGetMemoryHeapInfo(device, memReqs.heaps[0], GR_INFO_TYPE_MEMORY_HEAP_PROPERTIES, &heapPropsSize, &heapProps);
-
-	GR_GPU_MEMORY pipelineMemory;
-	GR_MEMORY_ALLOC_INFO allocInfo = {};
-	allocInfo.size = max(1, memReqs.size / heapProps.pageSize) * heapProps.pageSize;
-	allocInfo.alignment = 0;
-	allocInfo.memPriority = GR_MEMORY_PRIORITY_HIGH;
-	allocInfo.heapCount = 1;
-	allocInfo.heaps[0] = memReqs.heaps[0];
-	grAllocMemory(device, &allocInfo, &pipelineMemory);
-
-	grBindObjectMemory(pipeline, pipelineMemory, 0);
-
-	GR_MEMORY_REF pipelineMemoryRef = {};
-	pipelineMemoryRef.mem = pipelineMemory;
-
+void initDescriptorSet(GR_DEVICE device, GR_QUEUE commandQueue, GR_DESCRIPTOR_SET& descriptorSet, GR_MEMORY_REF& descriptorMemRef, GR_MEMORY_REF& vertexDataMemRef) {
 	// Create descriptor set for vertex shader inputs
-	GR_DESCRIPTOR_SET descriptorSet;
 	GR_DESCRIPTOR_SET_CREATE_INFO descriptorCreateInfo = {};
 	descriptorCreateInfo.slots = 2;
 
 	grCreateDescriptorSet(device, &descriptorCreateInfo, &descriptorSet);
 
-	// Allocate memory for descriptor set
-	grGetObjectInfo(descriptorSet, GR_INFO_TYPE_MEMORY_REQUIREMENTS, &memReqsSize, &memReqs);
-	grGetMemoryHeapInfo(device, memReqs.heaps[0], GR_INFO_TYPE_MEMORY_HEAP_PROPERTIES, &heapPropsSize, &heapProps);
+	descriptorMemRef = allocateObjectMemory(device, descriptorSet);
 
-	GR_GPU_MEMORY descriptorMemory;
-	allocInfo.size = max(1, memReqs.size / heapProps.pageSize) * heapProps.pageSize;
-	allocInfo.alignment = 0;
-	allocInfo.memPriority = GR_MEMORY_PRIORITY_HIGH;
-	allocInfo.heapCount = 1;
-	allocInfo.heaps[0] = memReqs.heaps[0];
-	grAllocMemory(device, &allocInfo, &descriptorMemory);
-
-	grBindObjectMemory(descriptorSet, descriptorMemory, 0);
-
-	GR_MEMORY_REF descriptorMemoryRef = {};
-	descriptorMemoryRef.mem = descriptorMemory;
-
-	// Allocate memory for vertex data
-	GR_GPU_MEMORY vertexDataMemory;
-	allocInfo.size = max(1, sizeof(vertices) / heapProps.pageSize) * heapProps.pageSize;
-	allocInfo.alignment = 0;
-	allocInfo.memPriority = GR_MEMORY_PRIORITY_HIGH;
-	allocInfo.heapCount = 1;
-	// TODO: Find heap that is guaranteed to be CPU accessible instead of piggybacking
-	allocInfo.heaps[0] = memReqs.heaps[0];
-	grAllocMemory(device, &allocInfo, &vertexDataMemory);
+	// Store vertex data in GPU memory
+	GR_GPU_MEMORY vertexDataMemory = allocateMappableBuffer(device, sizeof(vertices));
 
 	void* bufferPointer;
 	grMapMemory(vertexDataMemory, 0, &bufferPointer);
-		memcpy(bufferPointer, vertices, sizeof(vertices));
+	memcpy(bufferPointer, vertices, sizeof(vertices));
 	grUnmapMemory(vertexDataMemory);
 
-	GR_MEMORY_REF vertexDataMemRef = {};
+	vertexDataMemRef = {};
 	vertexDataMemRef.mem = vertexDataMemory;
 
 	// Create and submit command buffer that transitions vertex data memory to being shader accessible
@@ -366,115 +344,197 @@ int main(int argc, char *args[]) {
 
 	grEndCommandBuffer(initDataCmdBuffer);
 
-	grQueueSubmit(universalQueue, 1, &initDataCmdBuffer, 1, &vertexDataMemRef, 0);
+	grQueueSubmit(commandQueue, 1, &initDataCmdBuffer, 1, &vertexDataMemRef, 0);
 
 	// Attach views to the vertex data to the descriptor set
 	grBeginDescriptorSetUpdate(descriptorSet);
-		
-		GR_MEMORY_VIEW_ATTACH_INFO memoryViewAttachInfo = {};
-		memoryViewAttachInfo.mem = vertexDataMemory;
-		memoryViewAttachInfo.offset = 0;
-		memoryViewAttachInfo.stride = sizeof(float) * 4;
-		memoryViewAttachInfo.range = sizeof(float) * 12;
-		memoryViewAttachInfo.format.channelFormat = GR_CH_FMT_R32G32B32A32;
-		memoryViewAttachInfo.format.numericFormat = GR_NUM_FMT_FLOAT;
-		memoryViewAttachInfo.state = GR_MEMORY_STATE_GRAPHICS_SHADER_READ_ONLY;
 
-		grAttachMemoryViewDescriptors(descriptorSet, 0, 1, &memoryViewAttachInfo);
+	GR_MEMORY_VIEW_ATTACH_INFO memoryViewAttachInfo = {};
+	memoryViewAttachInfo.mem = vertexDataMemory;
+	memoryViewAttachInfo.offset = 0;
+	memoryViewAttachInfo.stride = sizeof(float) * 4;
+	memoryViewAttachInfo.range = sizeof(float) * 12;
+	memoryViewAttachInfo.format.channelFormat = GR_CH_FMT_R32G32B32A32;
+	memoryViewAttachInfo.format.numericFormat = GR_NUM_FMT_FLOAT;
+	memoryViewAttachInfo.state = GR_MEMORY_STATE_GRAPHICS_SHADER_READ_ONLY;
 
-		memoryViewAttachInfo.offset = sizeof(float) * 12;
-		memoryViewAttachInfo.range = sizeof(float) * 12;
+	grAttachMemoryViewDescriptors(descriptorSet, 0, 1, &memoryViewAttachInfo);
 
-		grAttachMemoryViewDescriptors(descriptorSet, 1, 1, &memoryViewAttachInfo);
+	memoryViewAttachInfo.offset = sizeof(float) * 12;
+	memoryViewAttachInfo.range = sizeof(float) * 12;
+
+	grAttachMemoryViewDescriptors(descriptorSet, 1, 1, &memoryViewAttachInfo);
 
 	grEndDescriptorSetUpdate(descriptorSet);
+}
 
+GR_CMD_BUFFER createPrepareBuffer(GR_DEVICE device, GR_IMAGE presentableImage, GR_IMAGE_SUBRESOURCE_RANGE imageColorRange) {
 	// Create command buffer that prepares the color target image for rendering
-	GR_CMD_BUFFER bufferPrepareRender;
-	grCreateCommandBuffer(device, &bufferCreateInfo, &bufferPrepareRender);
+	GR_CMD_BUFFER buffer;
+	grCreateCommandBuffer(device, &bufferCreateInfo, &buffer);
 
-	grBeginCommandBuffer(bufferPrepareRender, 0);
+	grBeginCommandBuffer(buffer, 0);
 
 		GR_IMAGE_STATE_TRANSITION transition = {};
-		transition.image = image;
+		transition.image = presentableImage;
 		transition.oldState = GR_WSI_WIN_IMAGE_STATE_PRESENT_WINDOWED;
 		transition.newState = GR_IMAGE_STATE_TARGET_RENDER_ACCESS_OPTIMAL;
 		transition.subresourceRange = imageColorRange;
 
-		grCmdPrepareImages(bufferPrepareRender, 1, &transition);
+		grCmdPrepareImages(buffer, 1, &transition);
 
-	grEndCommandBuffer(bufferPrepareRender);
+	grEndCommandBuffer(buffer);
 
+	return buffer;
+}
+
+GR_CMD_BUFFER createClearBuffer(GR_DEVICE device, GR_IMAGE presentableImage, GR_IMAGE_SUBRESOURCE_RANGE imageColorRange) {
 	// Create command buffer that clears the color target to black
-	GR_CMD_BUFFER bufferDrawTrianglelear;
-	grCreateCommandBuffer(device, &bufferCreateInfo, &bufferDrawTrianglelear);
+	GR_CMD_BUFFER buffer;
+	grCreateCommandBuffer(device, &bufferCreateInfo, &buffer);
 
-	grBeginCommandBuffer(bufferDrawTrianglelear, 0);
+	grBeginCommandBuffer(buffer, 0);
 
-		transition.image = image;
+		GR_IMAGE_STATE_TRANSITION transition = {};
+		transition.image = presentableImage;
 		transition.oldState = GR_IMAGE_STATE_TARGET_RENDER_ACCESS_OPTIMAL;
 		transition.newState = GR_IMAGE_STATE_CLEAR;
 		transition.subresourceRange = imageColorRange;
 
-		grCmdPrepareImages(bufferDrawTrianglelear, 1, &transition);
+		grCmdPrepareImages(buffer, 1, &transition);
 
-		float clearColor[] = {0.0, 00, 0.0, 1.0};
-		grCmdClearColorImage(bufferDrawTrianglelear, image, clearColor, 1, &imageColorRange);
+		float clearColor[] = {0.0, 0.0, 0.0, 1.0};
+		grCmdClearColorImage(buffer, presentableImage, clearColor, 1, &imageColorRange);
 
-		transition.image = image;
+		transition.image = presentableImage;
 		transition.oldState = GR_IMAGE_STATE_CLEAR;
 		transition.newState = GR_IMAGE_STATE_TARGET_RENDER_ACCESS_OPTIMAL;
 		transition.subresourceRange = imageColorRange;
 
-		grCmdPrepareImages(bufferDrawTrianglelear, 1, &transition);
+		grCmdPrepareImages(buffer, 1, &transition);
 
-	grEndCommandBuffer(bufferDrawTrianglelear);
+	grEndCommandBuffer(buffer);
 
+	return buffer;
+}
+
+GR_CMD_BUFFER createDrawTriangleBuffer(GR_DEVICE device, GR_COLOR_TARGET_VIEW colorTargetView, GR_DESCRIPTOR_SET descriptorSet, GR_PIPELINE pipeline) {
 	// Create command buffer that renders the triangle
-	GR_CMD_BUFFER bufferDrawTriangle;
-	grCreateCommandBuffer(device, &bufferCreateInfo, &bufferDrawTriangle);
+	GR_CMD_BUFFER buffer;
+	grCreateCommandBuffer(device, &bufferCreateInfo, &buffer);
 
-	grBeginCommandBuffer(bufferDrawTriangle, 0);
+	grBeginCommandBuffer(buffer, 0);
 
 		// Bind render target
 		GR_COLOR_TARGET_BIND_INFO colorTargetBindInfo;
 		colorTargetBindInfo.view = colorTargetView;
 		colorTargetBindInfo.colorTargetState = GR_IMAGE_STATE_TARGET_RENDER_ACCESS_OPTIMAL;
 
-		grCmdBindTargets(bufferDrawTriangle, 1, &colorTargetBindInfo, nullptr);
+		grCmdBindTargets(buffer, 1, &colorTargetBindInfo, nullptr);
 
 		// Set up dynamic draw state
-		grCmdBindStateObject(bufferDrawTriangle, GR_STATE_BIND_MSAA, msaaState);
-		grCmdBindStateObject(bufferDrawTriangle, GR_STATE_BIND_VIEWPORT, viewportState);
-		grCmdBindStateObject(bufferDrawTriangle, GR_STATE_BIND_COLOR_BLEND, colorBlendState);
-		grCmdBindStateObject(bufferDrawTriangle, GR_STATE_BIND_DEPTH_STENCIL, depthStencilState);
-		grCmdBindStateObject(bufferDrawTriangle, GR_STATE_BIND_RASTER, rasterState);
+		grCmdBindStateObject(buffer, GR_STATE_BIND_MSAA, msaaState);
+		grCmdBindStateObject(buffer, GR_STATE_BIND_VIEWPORT, viewportState);
+		grCmdBindStateObject(buffer, GR_STATE_BIND_COLOR_BLEND, colorBlendState);
+		grCmdBindStateObject(buffer, GR_STATE_BIND_DEPTH_STENCIL, depthStencilState);
+		grCmdBindStateObject(buffer, GR_STATE_BIND_RASTER, rasterState);
 
 		// Bind descriptor set
-		grCmdBindDescriptorSet(bufferDrawTriangle, GR_PIPELINE_BIND_POINT_GRAPHICS, 0, descriptorSet, 0);
+		grCmdBindDescriptorSet(buffer, GR_PIPELINE_BIND_POINT_GRAPHICS, 0, descriptorSet, 0);
 
 		// Set graphics pipeline
-		grCmdBindPipeline(bufferDrawTriangle, GR_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+		grCmdBindPipeline(buffer, GR_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
 		// Render triangle
-		grCmdDraw(bufferDrawTriangle, 0, 3, 0, 1);
+		grCmdDraw(buffer, 0, 3, 0, 1);
 
-	grEndCommandBuffer(bufferDrawTriangle);
+	grEndCommandBuffer(buffer);
 
+	return buffer;
+}
+
+GR_CMD_BUFFER createFinishBuffer(GR_DEVICE device, GR_IMAGE presentableImage, GR_IMAGE_SUBRESOURCE_RANGE imageColorRange) {
 	// Create command buffer that transitions color target image back to a presentable state
-	GR_CMD_BUFFER bufferFinish;
-	grCreateCommandBuffer(device, &bufferCreateInfo, &bufferFinish);
+	GR_CMD_BUFFER buffer;
+	grCreateCommandBuffer(device, &bufferCreateInfo, &buffer);
 
-	grBeginCommandBuffer(bufferFinish, 0);
+	grBeginCommandBuffer(buffer, 0);
 
-		transition.image = image;
+		GR_IMAGE_STATE_TRANSITION transition = {};
+		transition.image = presentableImage;
 		transition.oldState = GR_IMAGE_STATE_TARGET_RENDER_ACCESS_OPTIMAL;
 		transition.newState = GR_WSI_WIN_IMAGE_STATE_PRESENT_WINDOWED;
 		transition.subresourceRange = imageColorRange;
 
-		grCmdPrepareImages(bufferFinish, 1, &transition);
+		grCmdPrepareImages(buffer, 1, &transition);
 
-	grEndCommandBuffer(bufferFinish);
+	grEndCommandBuffer(buffer);
+
+	return buffer;
+}
+
+int main(int argc, char *args[]) {
+	// Initialize function pointers, much like GLEW in OpenGL
+	mantleLoadFunctions();
+
+	// Set debug callback
+	grDbgRegisterMsgCallback(debugCallback, nullptr);
+
+	// Create device and presentable image
+	GR_DEVICE device;
+	GR_QUEUE universalQueue;
+	createDeviceAndQueue(device, universalQueue);
+
+	GR_IMAGE presentableImage;
+	GR_MEMORY_REF presentableImageMemRef;
+	GR_IMAGE_SUBRESOURCE_RANGE imageColorRange;
+	initPresentableImage(device, universalQueue, presentableImage, presentableImageMemRef, imageColorRange);
+
+	// Create window to present to
+	SDL_Init(SDL_INIT_VIDEO);
+
+	SDL_Window* window = SDL_CreateWindow("Mantle Hello Triangle", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WIDTH, HEIGHT, 0);
+
+	GR_WSI_WIN_PRESENT_INFO presentInfo = {};
+	presentInfo.hWndDest = GetActiveWindow();
+	presentInfo.srcImage = presentableImage;
+	presentInfo.presentMode = GR_WSI_WIN_PRESENT_MODE_WINDOWED;
+
+	// Create color target view
+	GR_COLOR_TARGET_VIEW colorTargetView;
+	GR_COLOR_TARGET_VIEW_CREATE_INFO colorTargetViewCreateInfo = {};
+	colorTargetViewCreateInfo.image = presentableImage;
+	colorTargetViewCreateInfo.arraySize = 1;
+	colorTargetViewCreateInfo.baseArraySlice = 0;
+	colorTargetViewCreateInfo.mipLevel = 0;
+	colorTargetViewCreateInfo.format.channelFormat = GR_CH_FMT_R8G8B8A8;
+	colorTargetViewCreateInfo.format.numericFormat = GR_NUM_FMT_UNORM;
+
+	grCreateColorTargetView(device, &colorTargetViewCreateInfo, &colorTargetView);
+
+	// Create dynamic states (viewport, depth/stencil operations, etc.)
+	createTargetStates(device, msaaState, viewportState, colorBlendState, depthStencilState, rasterState);
+
+	// Create graphics pipeline with shaders and descriptor bindings
+	GR_PIPELINE pipeline;
+	GR_MEMORY_REF pipelineMemRef;
+	createGraphicsPipeline(device, pipeline, pipelineMemRef);
+
+	// Set up descriptor set with vertex data memory views
+	GR_DESCRIPTOR_SET descriptorSet;
+	GR_MEMORY_REF descriptorMemRef, vertexDataMemRef;
+	initDescriptorSet(device, universalQueue, descriptorSet, descriptorMemRef, vertexDataMemRef);
+
+	// Create command buffers for rendering steps
+	GR_CMD_BUFFER bufferPrepareRender = createPrepareBuffer(device, presentableImage, imageColorRange);
+	GR_CMD_BUFFER bufferClear = createClearBuffer(device, presentableImage, imageColorRange);
+	GR_CMD_BUFFER bufferDrawTriangle = createDrawTriangleBuffer(device, colorTargetView, descriptorSet, pipeline);
+	GR_CMD_BUFFER bufferFinish = createFinishBuffer(device, presentableImage, imageColorRange);
+
+	// Create fence for CPU synchronization with rendering
+	GR_FENCE fence;
+	GR_FENCE_CREATE_INFO fenceCreateInfo = {};
+	grCreateFence(device, &fenceCreateInfo, &fence);
 
 	// Main loop
 	while (true) {
@@ -487,8 +547,8 @@ int main(int argc, char *args[]) {
 		grWaitForFences(device, 1, &fence, true, 1);
 
 		// Submit command buffers along with memory references
-		GR_MEMORY_REF memoryRefs[] = {imageMemoryRef, pipelineMemoryRef, descriptorMemoryRef, vertexDataMemRef};
-		GR_CMD_BUFFER commandBuffers[] = {bufferPrepareRender, bufferDrawTrianglelear, bufferDrawTriangle, bufferFinish};
+		GR_MEMORY_REF memoryRefs[] = {presentableImageMemRef, pipelineMemRef, descriptorMemRef, vertexDataMemRef};
+		GR_CMD_BUFFER commandBuffers[] = {bufferPrepareRender, bufferClear, bufferDrawTriangle, bufferFinish};
 
 		grQueueSubmit(universalQueue, 4, commandBuffers, 4, memoryRefs, fence);
 
