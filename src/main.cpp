@@ -10,6 +10,18 @@
 const int WIDTH = 1280;
 const int HEIGHT = 720;
 
+float vertices[] = {
+	// Positions
+	0.0, 0.5, 0.0, 1.0,
+	0.5, -0.5, 0.0, 1.0,
+	-0.5, -0.5, 0.0, 1.0,
+
+	// Colors
+	1.0, 0.0, 0.0, 1.0,
+	0.0, 1.0, 0.0, 1.0,
+	0.0, 0.0, 1.0, 1.0
+};
+
 GR_VOID GR_STDCALL debugCallback(GR_ENUM type, GR_ENUM level, GR_BASE_OBJECT obj, GR_SIZE location, GR_ENUM msgCode, const GR_CHAR* msg, GR_VOID* userData) {
 	std::cerr << "DEBUG: " << msg << std::endl;
 }
@@ -156,8 +168,8 @@ int main(int argc, char *args[]) {
 	GR_VIEWPORT_STATE_CREATE_INFO viewportStateCreateInfo = {};
 	viewportStateCreateInfo.viewportCount = 1;
 	viewportStateCreateInfo.scissorEnable = GR_FALSE;
-	viewportStateCreateInfo.viewports[0].width = 1280;
-	viewportStateCreateInfo.viewports[0].height = 720;
+	viewportStateCreateInfo.viewports[0].width = WIDTH;
+	viewportStateCreateInfo.viewports[0].height = HEIGHT;
 	viewportStateCreateInfo.viewports[0].minDepth = 0;
 	viewportStateCreateInfo.viewports[0].maxDepth = 1;
 
@@ -233,23 +245,28 @@ int main(int argc, char *args[]) {
 	pipelineCreateInfo.vs.linkConstBufferCount = 0;
 	pipelineCreateInfo.vs.dynamicMemoryViewMapping.slotObjectType = GR_SLOT_UNUSED;
 
-	GR_DESCRIPTOR_SLOT_INFO vsDescriptorSlot;
-	vsDescriptorSlot.slotObjectType = GR_SLOT_SHADER_RESOURCE;
-	vsDescriptorSlot.shaderEntityIndex = 0;
+	GR_DESCRIPTOR_SLOT_INFO vsDescriptorSlots[2];
 
-	pipelineCreateInfo.vs.descriptorSetMapping[0].descriptorCount = 1;
-	pipelineCreateInfo.vs.descriptorSetMapping[0].pDescriptorInfo = &vsDescriptorSlot;
+	vsDescriptorSlots[0].slotObjectType = GR_SLOT_SHADER_RESOURCE;
+	vsDescriptorSlots[0].shaderEntityIndex = 0;
+
+	vsDescriptorSlots[1].slotObjectType = GR_SLOT_SHADER_RESOURCE;
+	vsDescriptorSlots[1].shaderEntityIndex = 1;
+
+	pipelineCreateInfo.vs.descriptorSetMapping[0].descriptorCount = 2;
+	pipelineCreateInfo.vs.descriptorSetMapping[0].pDescriptorInfo = vsDescriptorSlots;
 
 	pipelineCreateInfo.ps.shader = fragShader;
 	pipelineCreateInfo.ps.linkConstBufferCount = 0;
 	pipelineCreateInfo.ps.dynamicMemoryViewMapping.slotObjectType = GR_SLOT_UNUSED;
 
-	GR_DESCRIPTOR_SLOT_INFO psDescriptorSlot;
-	psDescriptorSlot.slotObjectType = GR_SLOT_UNUSED;
-	psDescriptorSlot.shaderEntityIndex = 0;
+	GR_DESCRIPTOR_SLOT_INFO psDescriptorSlots[2];
 
-	pipelineCreateInfo.ps.descriptorSetMapping[0].descriptorCount = 1;
-	pipelineCreateInfo.ps.descriptorSetMapping[0].pDescriptorInfo = &psDescriptorSlot;
+	psDescriptorSlots[0].slotObjectType = GR_SLOT_UNUSED;
+	psDescriptorSlots[1].slotObjectType = GR_SLOT_UNUSED;
+
+	pipelineCreateInfo.ps.descriptorSetMapping[0].descriptorCount = 2;
+	pipelineCreateInfo.ps.descriptorSetMapping[0].pDescriptorInfo = psDescriptorSlots;
 
 	pipelineCreateInfo.iaState.topology = GR_TOPOLOGY_TRIANGLE_LIST;
 	pipelineCreateInfo.iaState.disableVertexReuse = GR_FALSE;
@@ -290,10 +307,10 @@ int main(int argc, char *args[]) {
 	GR_MEMORY_REF pipelineMemoryRef = {};
 	pipelineMemoryRef.mem = pipelineMemory;
 
-	// Create descriptor set for vertex shader input
+	// Create descriptor set for vertex shader inputs
 	GR_DESCRIPTOR_SET descriptorSet;
 	GR_DESCRIPTOR_SET_CREATE_INFO descriptorCreateInfo = {};
-	descriptorCreateInfo.slots = 1;
+	descriptorCreateInfo.slots = 2;
 
 	grCreateDescriptorSet(device, &descriptorCreateInfo, &descriptorSet);
 
@@ -315,26 +332,18 @@ int main(int argc, char *args[]) {
 	descriptorMemoryRef.mem = descriptorMemory;
 
 	// Allocate memory for vertex data
-	float colors[] = {
-		1.0f, 0.0f, 0.0f, 1.0f,
-		0.0f, 1.0f, 0.0f, 1.0f,
-		0.0f, 0.0f, 1.0f, 1.0f
-	};
-
-	// TODO: Find heap that is guaranteed to be CPU accessible instead of piggybacking
 	GR_GPU_MEMORY vertexDataMemory;
-	allocInfo.size = max(1, sizeof(colors) / heapProps.pageSize) * heapProps.pageSize;
+	allocInfo.size = max(1, sizeof(vertices) / heapProps.pageSize) * heapProps.pageSize;
 	allocInfo.alignment = 0;
 	allocInfo.memPriority = GR_MEMORY_PRIORITY_HIGH;
 	allocInfo.heapCount = 1;
+	// TODO: Find heap that is guaranteed to be CPU accessible instead of piggybacking
 	allocInfo.heaps[0] = memReqs.heaps[0];
 	grAllocMemory(device, &allocInfo, &vertexDataMemory);
 
 	void* bufferPointer;
 	grMapMemory(vertexDataMemory, 0, &bufferPointer);
-
-	memcpy(bufferPointer, colors, sizeof(colors));
-
+		memcpy(bufferPointer, vertices, sizeof(vertices));
 	grUnmapMemory(vertexDataMemory);
 
 	GR_MEMORY_REF vertexDataMemRef = {};
@@ -351,7 +360,7 @@ int main(int argc, char *args[]) {
 		dataTransition.oldState = GR_MEMORY_STATE_DATA_TRANSFER;
 		dataTransition.newState = GR_MEMORY_STATE_GRAPHICS_SHADER_READ_ONLY;
 		dataTransition.offset = 0;
-		dataTransition.regionSize = sizeof(colors);
+		dataTransition.regionSize = sizeof(vertices);
 
 		grCmdPrepareMemoryRegions(initDataCmdBuffer, 1, &dataTransition);
 
@@ -359,18 +368,25 @@ int main(int argc, char *args[]) {
 
 	grQueueSubmit(universalQueue, 1, &initDataCmdBuffer, 1, &vertexDataMemRef, 0);
 
-	// Attach a view to the vertex data to the descriptor set
-	GR_MEMORY_VIEW_ATTACH_INFO memoryViewAttachInfo = {};
-	memoryViewAttachInfo.mem = vertexDataMemory;
-	memoryViewAttachInfo.offset = 0;
-	memoryViewAttachInfo.stride = sizeof(colors) / 3;
-	memoryViewAttachInfo.range = sizeof(colors);
-	memoryViewAttachInfo.format.channelFormat = GR_CH_FMT_R32G32B32A32;
-	memoryViewAttachInfo.format.numericFormat = GR_NUM_FMT_FLOAT;
-	memoryViewAttachInfo.state = GR_MEMORY_STATE_GRAPHICS_SHADER_READ_ONLY;
-
+	// Attach views to the vertex data to the descriptor set
 	grBeginDescriptorSetUpdate(descriptorSet);
+		
+		GR_MEMORY_VIEW_ATTACH_INFO memoryViewAttachInfo = {};
+		memoryViewAttachInfo.mem = vertexDataMemory;
+		memoryViewAttachInfo.offset = 0;
+		memoryViewAttachInfo.stride = sizeof(float) * 4;
+		memoryViewAttachInfo.range = sizeof(float) * 12;
+		memoryViewAttachInfo.format.channelFormat = GR_CH_FMT_R32G32B32A32;
+		memoryViewAttachInfo.format.numericFormat = GR_NUM_FMT_FLOAT;
+		memoryViewAttachInfo.state = GR_MEMORY_STATE_GRAPHICS_SHADER_READ_ONLY;
+
 		grAttachMemoryViewDescriptors(descriptorSet, 0, 1, &memoryViewAttachInfo);
+
+		memoryViewAttachInfo.offset = sizeof(float) * 12;
+		memoryViewAttachInfo.range = sizeof(float) * 12;
+
+		grAttachMemoryViewDescriptors(descriptorSet, 1, 1, &memoryViewAttachInfo);
+
 	grEndDescriptorSetUpdate(descriptorSet);
 
 	// Create command buffer that prepares the color target image for rendering
@@ -402,7 +418,7 @@ int main(int argc, char *args[]) {
 
 		grCmdPrepareImages(bufferDrawTrianglelear, 1, &transition);
 
-		float clearColor[] = {0.0, 0.0, 0.0, 1.0};
+		float clearColor[] = {0.0, 00, 0.0, 1.0};
 		grCmdClearColorImage(bufferDrawTrianglelear, image, clearColor, 1, &imageColorRange);
 
 		transition.image = image;

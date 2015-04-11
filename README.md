@@ -23,13 +23,27 @@ Status
 ------
 
 The code is capable of creating a window using the SDL library, clearing it to
-black and rendering a red triangle using Mantle.
+black and rendering a per-vertex colored triangle using Mantle.
 
-![Preview of running program](http://i.imgur.com/pGsOlit.png)
+![Preview of running program](http://i.imgur.com/r5PxoRv.png)
 
-The vertex data is currently hardcoded in the vertex shader, which uses the
-`SV_VertexID` built-in variable to select a position. The next step is to pass
-vertex data from the program using descriptor sets.
+The vertex shader reads the position (`float4`) and color (`float4`) from a
+buffer using the `SV_VertexID` built-in variable. Each buffer is assigned a
+memory view into GPU memory filled with the following data:
+
+    float vertices[] = {
+        // Positions
+        0.0, 0.5, 0.0, 1.0,
+        0.5, -0.5, 0.0, 1.0,
+        -0.5, -0.5, 0.0, 1.0,
+
+        // Colors
+        1.0, 0.0, 0.0, 1.0,
+        0.0, 1.0, 0.0, 1.0,
+        0.0, 0.0, 1.0, 1.0
+    };
+
+The next step is to clean up the code.
 
 Shader compilation
 ------------------
