@@ -61,7 +61,7 @@ GR_MEMORY_REF allocateObjectMemory(GR_DEVICE device, GR_OBJECT object) {
 
 	GR_GPU_MEMORY memory;
 	GR_MEMORY_ALLOC_INFO allocInfo = {};
-	allocInfo.size = max(1, memReqs.size / heapProps.pageSize) * heapProps.pageSize;
+	allocInfo.size = (1 + memReqs.size / heapProps.pageSize) * heapProps.pageSize;
 	allocInfo.alignment = 0;
 	allocInfo.memPriority = GR_MEMORY_PRIORITY_HIGH;
 	allocInfo.heapCount = 1;
@@ -97,7 +97,7 @@ GR_GPU_MEMORY allocateMappableBuffer(GR_DEVICE device, GR_GPU_SIZE size) {
 	// Allocate buffer in that heap with multiple of page size >= size
 	GR_GPU_MEMORY memory;
 	GR_MEMORY_ALLOC_INFO allocInfo = {};
-	allocInfo.size = max(1, size / heapProps.pageSize) * heapProps.pageSize;
+	allocInfo.size = (1 + size / heapProps.pageSize) * heapProps.pageSize;
 	allocInfo.alignment = 0;
 	allocInfo.memPriority = GR_MEMORY_PRIORITY_HIGH;
 	allocInfo.heapCount = 1;
