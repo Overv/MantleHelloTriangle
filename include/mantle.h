@@ -20,7 +20,7 @@ typedef uint32_t GR_BOOL;
 typedef void GR_VOID;
 
 typedef size_t GR_SIZE;
-typedef size_t GR_GPU_SIZE;
+typedef uint64_t GR_GPU_SIZE;
 
 typedef int32_t GR_ENUM;
 typedef int32_t GR_FLAGS;
