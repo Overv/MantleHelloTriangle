@@ -4,6 +4,13 @@ Introduction
 This is an effort to implement Hello Triangle using the Mantle API by using the
 API reference and reverse engineering public Mantle demos.
 
+See this blog post for more information:
+
+https://medium.com/@Overv/implementing-hello-triangle-in-mantle-4302450fbcd2
+
+Approach
+--------
+
 The [reference](http://www.amd.com/Documents/Mantle-Programming-Guide-and-API-Reference.pdf)
 is used as primary resource, because it contains a full API reference and some
 sample code. Unfortunately it misses a lot of the constant definitions, like
