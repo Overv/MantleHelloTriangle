@@ -3,7 +3,8 @@
 #include <vector>
 #include <cassert>
 
-#include <SDL.h>
+//#include <SDL.h>
+#include <glfw3.h>
 
 #include "mantle.h"
 
@@ -85,7 +86,7 @@ GR_GPU_MEMORY allocateMappableBuffer(GR_DEVICE device, GR_GPU_SIZE size) {
 	GR_SIZE heapPropsSize = sizeof(heapProps);
 	GR_UINT suitableHeap = -1;
 
-	for (int i = 0; i < heapCount; i++) {
+	for (GR_UINT i = 0; i < heapCount; i++) {
 		grGetMemoryHeapInfo(device, i, GR_INFO_TYPE_MEMORY_HEAP_PROPERTIES, &heapPropsSize, &heapProps);
 
 		if (heapProps.flags & GR_MEMORY_HEAP_CPU_VISIBLE) {
@@ -491,9 +492,27 @@ int main(int argc, char *args[]) {
 	initPresentableImage(device, universalQueue, presentableImage, presentableImageMemRef, imageColorRange);
 
 	// Create window to present to
-	SDL_Init(SDL_INIT_VIDEO);
 
-	SDL_Window* window = SDL_CreateWindow("Mantle Hello Triangle", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WIDTH, HEIGHT, 0);
+	GLFWwindow* window;
+
+	//glfwSetErrorCallback(error_callback);
+
+	if (!glfwInit())
+		exit(EXIT_FAILURE);
+
+	window = glfwCreateWindow(WIDTH, HEIGHT, "Mantle Hello Triangle", NULL, NULL);
+	if (!window)
+	{
+		glfwTerminate();
+		exit(EXIT_FAILURE);
+	}
+
+	glfwMakeContextCurrent(window);
+	glfwSwapInterval(0);
+
+	//SDL_Init(SDL_INIT_VIDEO);
+
+	//SDL_Window* window = SDL_CreateWindow("Mantle Hello Triangle", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WIDTH, HEIGHT, 0);
 
 	GR_WSI_WIN_PRESENT_INFO presentInfo = {};
 	presentInfo.hWndDest = GetActiveWindow();
@@ -536,6 +555,35 @@ int main(int argc, char *args[]) {
 	GR_FENCE_CREATE_INFO fenceCreateInfo = {};
 	grCreateFence(device, &fenceCreateInfo, &fence);
 
+
+
+
+	//glfwSetKeyCallback(window, key_callback);
+
+	while (!glfwWindowShouldClose(window))
+	{
+		// Wait for previous frame to end
+		grWaitForFences(device, 1, &fence, true, 1);
+
+		// Submit command buffers along with memory references
+		GR_MEMORY_REF memoryRefs[] = { presentableImageMemRef, pipelineMemRef, descriptorMemRef, vertexDataMemRef };
+		GR_CMD_BUFFER commandBuffers[] = { bufferPrepareRender, bufferClear, bufferDrawTriangle, bufferFinish };
+
+		grQueueSubmit(universalQueue, 4, commandBuffers, 4, memoryRefs, fence);
+
+		// Present image to the window
+		grWsiWinQueuePresent(universalQueue, &presentInfo);
+
+		glfwSwapBuffers(window);
+		glfwPollEvents();
+	}
+
+	glfwDestroyWindow(window);
+
+	glfwTerminate();
+	exit(EXIT_SUCCESS);
+
+	/*
 	// Main loop
 	while (true) {
 		SDL_Event windowEvent;
@@ -557,4 +605,5 @@ int main(int argc, char *args[]) {
 	}
 
 	return 0;
+	*/
 }
