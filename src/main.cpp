@@ -38,11 +38,10 @@ std::vector<char> loadShader(const std::string& filename) {
 	std::ifstream file(filename, std::ios::binary | std::ios::ate);
 
 	auto size = file.tellg();
-	file.seekg(std::ios::beg, 0);
+	file.seekg(0, std::ios::beg);
 
 	std::vector<char> data;
 	data.resize(size);
-
 	file.read(&data[0], size);
 
 	file.close();
@@ -299,7 +298,7 @@ void createGraphicsPipeline(GR_DEVICE device, GR_PIPELINE& pipeline, GR_MEMORY_R
 	pipelineCreateInfo.cbState.target[0].format.channelFormat = GR_CH_FMT_R8G8B8A8;
 	pipelineCreateInfo.cbState.target[0].format.numericFormat = GR_NUM_FMT_UNORM;
 
-	pipelineCreateInfo.dbState.format.channelFormat = GR_CH_FMT_R4G4B4A4;
+	pipelineCreateInfo.dbState.format.channelFormat = GR_CH_FMT_UNDEFINED;
 	pipelineCreateInfo.dbState.format.numericFormat = GR_NUM_FMT_UNDEFINED;
 
 	grCreateGraphicsPipeline(device, &pipelineCreateInfo, &pipeline);

@@ -3,7 +3,7 @@
 
 #define WIN32_LEAN_AND_MEAN
 
-#include <Windows.h>
+#include <windows.h>
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -18,48 +18,48 @@ typedef uint8_t GR_UINT8;
 typedef uint32_t GR_UINT32;
 typedef uint64_t GR_UINT64;
 typedef float GR_FLOAT;
-typedef uint32_t GR_BOOL;
+typedef int32_t GR_BOOL;
 typedef void GR_VOID;
 
 typedef size_t GR_SIZE;
 typedef uint64_t GR_GPU_SIZE;
 
-typedef int32_t GR_ENUM;
-typedef int32_t GR_FLAGS;
-typedef uint32_t GR_SAMPLE_MASK; // Guess
+typedef uint32_t GR_ENUM;
+typedef uint32_t GR_FLAGS;
+typedef uint32_t GR_SAMPLE_MASK;
 
-typedef uint64_t GR_PHYSICAL_GPU;
-typedef uint64_t GR_DEVICE;
-typedef uint64_t GR_WSI_WIN_DISPLAY;
-typedef uint64_t GR_QUEUE;
-typedef uint64_t GR_IMAGE;
-typedef uint64_t GR_GPU_MEMORY;
-typedef uint64_t GR_CMD_BUFFER;
-typedef uint64_t GR_FENCE;
-typedef uint64_t GR_BASE_OBJECT;
-typedef uint64_t GR_VIEWPORT_STATE_OBJECT;
-typedef uint64_t GR_COLOR_TARGET_VIEW;
-typedef uint64_t GR_DESCRIPTOR_SET;
-typedef uint64_t GR_OBJECT;
-typedef uint64_t GR_MSAA_STATE_OBJECT;
-typedef uint64_t GR_SAMPLER;
-typedef uint64_t GR_COLOR_BLEND_STATE_OBJECT;
-typedef uint64_t GR_DEPTH_STENCIL_STATE_OBJECT;
-typedef uint64_t GR_RASTER_STATE_OBJECT;
-typedef uint64_t GR_SHADER;
-typedef uint64_t GR_PIPELINE;
-typedef uint64_t GR_IMAGE_VIEW;
-typedef uint64_t GR_DEPTH_STENCIL_VIEW;
-typedef uint64_t GR_STATE_OBJECT;
+typedef void* GR_PHYSICAL_GPU;
+typedef void* GR_DEVICE;
+typedef void* GR_WSI_WIN_DISPLAY;
+typedef void* GR_QUEUE;
+typedef void* GR_IMAGE;
+typedef void* GR_GPU_MEMORY;
+typedef void* GR_CMD_BUFFER;
+typedef void* GR_FENCE;
+typedef void* GR_BASE_OBJECT;
+typedef void* GR_VIEWPORT_STATE_OBJECT;
+typedef void* GR_COLOR_TARGET_VIEW;
+typedef void* GR_DESCRIPTOR_SET;
+typedef void* GR_OBJECT;
+typedef void* GR_MSAA_STATE_OBJECT;
+typedef void* GR_SAMPLER;
+typedef void* GR_COLOR_BLEND_STATE_OBJECT;
+typedef void* GR_DEPTH_STENCIL_STATE_OBJECT;
+typedef void* GR_RASTER_STATE_OBJECT;
+typedef void* GR_SHADER;
+typedef void* GR_PIPELINE;
+typedef void* GR_IMAGE_VIEW;
+typedef void* GR_DEPTH_STENCIL_VIEW;
+typedef void* GR_STATE_OBJECT;
 
-const uint64_t GR_NULL_HANDLE = 0;
+#define GR_NULL_HANDLE NULL
 
-const int GR_MAX_PHYSICAL_GPUS = 4;
+const int GR_MAX_PHYSICAL_GPUS = 16;
 const int GR_API_VERSION = 1;
-const int GR_MAX_PHYSICAL_GPU_NAME = 255; // Guess
-const int GR_MAX_VIEWPORTS = 16; // Guess
+const int GR_MAX_PHYSICAL_GPU_NAME = 256;
+const int GR_MAX_VIEWPORTS = 16;
 const int GR_MAX_MEMORY_HEAPS = 8;
-const int GR_MAX_COLOR_TARGETS = 16; // Guess
+const int GR_MAX_COLOR_TARGETS = 8;
 const int GR_MAX_DESCRIPTOR_SETS = 2;
 
 const GR_BOOL GR_TRUE = 1;
@@ -1237,7 +1237,7 @@ bool mantleLoadFunctions() {
 	if (loaded) return true;
 	loaded = true;
 
-	HMODULE mantleDll = LoadLibrary(TEXT("C:/Windows/System32/mantle64.dll"));
+	HMODULE mantleDll = LoadLibrary(TEXT("mantle64.dll"));
 	if (!mantleDll) return false;
 
 	bool fnCheck = true;
